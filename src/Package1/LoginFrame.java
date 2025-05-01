@@ -158,28 +158,37 @@ public class LoginFrame extends javax.swing.JFrame {
     String username = jTextField1.getText();
     String password = new String(jPasswordField1.getPassword());
 
+    String sql = "SELECT UserID, FullName, Role FROM Users WHERE Username = ? AND Password = ?"; // Ensure UserID is selected
+
     try (Connection conn = DBConnection.getConnection();
-         PreparedStatement stmt = conn.prepareStatement("SELECT * FROM users WHERE Username = ? AND Password = ?")) {
-        
-        stmt.setString(1, username);
-        stmt.setString(2, password);
-        
-        ResultSet rs = stmt.executeQuery();
+     PreparedStatement pstmt = conn.prepareStatement(sql)) {
+    pstmt.setString(1, username);
+    pstmt.setString(2, password);
+    try (ResultSet rs = pstmt.executeQuery()) {
         if (rs.next()) {
-            User user = UserInfo.getUserInfo(username);
-            if (user != null && user.getFullName() != null){
-            new DashboardFrame(user).setVisible(true);
-            this.dispose();
-            }else{
-                JOptionPane.showMessageDialog(this, "Invalid username or user not found.");
-            }  
+            int userIdFromDB = rs.getInt("UserID"); // Retrieve UserID
+            String fullNameFromDB = rs.getString("FullName");
+            String roleFromDB = rs.getString("Role");
+
+            User loggedInUser = new User();
+            loggedInUser.setUserId(userIdFromDB); // Set the UserID in the User object
+            loggedInUser.setFullName(fullNameFromDB);
+            loggedInUser.setRole(roleFromDB);
+            loggedInUser.setUsername(username);
+
+            System.out.println("Login Successful - User ID: " + loggedInUser.getUserId()); // Debug
+
+            DashBoardFrame1 dashboardFrame = new DashBoardFrame1(loggedInUser);
+            this.dispose(); // Close the login frame
+            dashboardFrame.showDashboard(); // ADD THIS LINE
         } else {
-            javax.swing.JOptionPane.showMessageDialog(this, "Invalid username or password", "Login Failed", javax.swing.JOptionPane.ERROR_MESSAGE);
+            JOptionPane.showMessageDialog(this, "Invalid credentials.", "Login Failed", JOptionPane.ERROR_MESSAGE);
         }
-    } catch (Exception e) {
-        e.printStackTrace();
-        javax.swing.JOptionPane.showMessageDialog(this, "Database connection error", "Error", javax.swing.JOptionPane.ERROR_MESSAGE);
     }
+} catch (SQLException ex) {
+    JOptionPane.showMessageDialog(this, "Database error: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+    ex.printStackTrace();
+}
 }
     
     
@@ -208,6 +217,8 @@ public class LoginFrame extends javax.swing.JFrame {
     private javax.swing.JPasswordField jPasswordField1;
     private javax.swing.JTextField jTextField1;
     // End of variables declaration//GEN-END:variables
+
+   
 
    
   
