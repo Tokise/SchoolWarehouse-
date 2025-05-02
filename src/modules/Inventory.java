@@ -70,6 +70,20 @@ public class Inventory extends javax.swing.JPanel {
     private Connection conn = null; // Initialize conn to null
     private int currentUserId; // Assume this is set correctly elsewhere
 
+    // >>> Pagination Variables <<<
+    private int currentPage = 1;
+    private final int itemsPerPage = 10; // You can adjust this value for inventory
+    private int totalItems = 0;
+    private JButton jButtonPreviousPage;
+    private JButton jButtonNextPage;
+    private JLabel jLabelPageInfo;
+    // >>> End Pagination Variables <<<
+
+    // >>> Add Category Components <<<
+    private JButton jButtonAddCategory;
+    // >>> End Add Category Components <<<
+
+
     public Inventory() {
         // Establish connection first
         if (!connectToDatabase()) {
@@ -80,13 +94,17 @@ public class Inventory extends javax.swing.JPanel {
         initComponents(); // Initialize NetBeans generated components (if any)
         setupInventoryPanel(); // Setup custom UI components
         loadCategories(); // Load categories into combo boxes
-        loadInventoryData(); // Load initial data into the table
+        // Initial data load and pagination update will happen after setCurrentUserId is called
     }
 
     // Setter for currentUserId (ensure this is called after login)
     public void setCurrentUserId(int userId) {
         this.currentUserId = userId;
         System.out.println("Inventory: setCurrentUserId called with: " + userId + ", currentUserId is now: " + this.currentUserId);
+        // Load initial data and total count after user is set
+        currentPage = 1; // Start from the first page
+        fetchTotalItemCount(); // Fetch total count first
+        // loadInventoryData() is called after total count is fetched and pagination updated
     }
 
     // Establishes database connection
@@ -107,20 +125,22 @@ public class Inventory extends javax.swing.JPanel {
     }
 
     // Sets up the main layout and components of the Inventory panel
+    // Modified to include pagination and add category button
     private void setupInventoryPanel() {
         this.setLayout(new BorderLayout(10, 10));
         this.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
         this.setBackground(new Color(30, 30, 30)); // Dark background
 
         // Top: Search and Filter Panel
-        JPanel searchPanel = createSearchPanel();
-        this.add(searchPanel, BorderLayout.NORTH);
+        JPanel searchFilterPanel = createSearchFilterPanel(); // Method to create search/filter part
+        this.add(searchFilterPanel, BorderLayout.NORTH);
+
 
         // Center: Table and Details Panel Wrapper
         JPanel centerPanel = new JPanel(new BorderLayout(10, 0));
         centerPanel.setOpaque(false); // Make transparent to show main background
 
-        // Center-Left: Inventory Table Panel
+        // Center-Left: Inventory Table Panel (Modified to include pagination controls)
         JPanel tablePanel = createInventoryTablePanel();
         centerPanel.add(tablePanel, BorderLayout.CENTER);
 
@@ -131,9 +151,28 @@ public class Inventory extends javax.swing.JPanel {
 
         this.add(centerPanel, BorderLayout.CENTER);
 
-        // Bottom: Action Buttons Panel
-        JPanel actionPanel = createActionPanel();
-        this.add(actionPanel, BorderLayout.SOUTH);
+        // Bottom: Action Buttons and Add Category Panel
+        JPanel bottomPanel = new JPanel(new BorderLayout()); // Use BorderLayout for bottom
+        bottomPanel.setOpaque(false);
+
+        // Add Category Button Panel (Bottom Left)
+        JPanel addCategoryPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 5));
+        addCategoryPanel.setOpaque(false);
+
+        jButtonAddCategory = new JButton("Add Category");
+        styleAddCategoryButton(jButtonAddCategory); // Apply separate styling
+        jButtonAddCategory.addActionListener(e -> showAddCategoryDialog()); // Action to show dialog
+        addCategoryPanel.add(jButtonAddCategory);
+
+        bottomPanel.add(addCategoryPanel, BorderLayout.WEST); // Add add category button to the west of bottom panel
+
+        // Action Buttons Panel (Bottom Right)
+        JPanel actionPanel = createActionPanel(); // This panel already uses FlowLayout.RIGHT
+        bottomPanel.add(actionPanel, BorderLayout.EAST); // Add action buttons to the east of bottom panel
+
+
+        this.add(bottomPanel, BorderLayout.SOUTH); // Add the combined bottom panel to the main panel's SOUTH
+
 
         // Add Mouse Listener to the table for row selection
         inventoryTable.addMouseListener(new MouseAdapter() {
@@ -157,8 +196,8 @@ public class Inventory extends javax.swing.JPanel {
         });
     }
 
-    // Creates the top panel with search field, category filter, and search button
-    private JPanel createSearchPanel() {
+    // Creates the panel with search field and category filter
+    private JPanel createSearchFilterPanel() {
         JPanel panel = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 5));
         panel.setOpaque(false);
 
@@ -188,15 +227,19 @@ public class Inventory extends javax.swing.JPanel {
         searchBtn.setFont(new Font("Verdana", Font.BOLD, 14));
         searchBtn.setBackground(new Color(41, 128, 185));
         searchBtn.setForeground(Color.WHITE);
-        searchBtn.addActionListener((ActionEvent e) -> searchInventory());
+        searchBtn.addActionListener((ActionEvent e) -> {
+             currentPage = 1; // Reset to first page on search
+             fetchTotalItemCount(); // Fetch total count with filter and then display data
+        });
         panel.add(searchBtn);
 
         return panel;
     }
 
-    // Creates the panel containing the inventory JTable
+
+    // Creates the panel containing the inventory JTable and pagination controls
     private JPanel createInventoryTablePanel() {
-        JPanel panel = new JPanel(new BorderLayout());
+        JPanel panel = new JPanel(new BorderLayout()); // Use BorderLayout for table and pagination
         panel.setOpaque(false);
         panel.setBorder(BorderFactory.createTitledBorder(BorderFactory.createLineBorder(Color.GRAY),
                 "Inventory Items", javax.swing.border.TitledBorder.DEFAULT_JUSTIFICATION,
@@ -293,6 +336,28 @@ public class Inventory extends javax.swing.JPanel {
         scrollPane.getViewport().setBackground(new Color(30, 30, 30)); // Match background
         panel.add(scrollPane, BorderLayout.CENTER);
 
+        // >>> Pagination Controls Panel <<<
+        JPanel paginationPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+        paginationPanel.setOpaque(false);
+
+        jButtonPreviousPage = new JButton("Previous");
+        stylePaginationButton(jButtonPreviousPage); // Apply styling
+        jButtonPreviousPage.addActionListener(e -> gotoPreviousPage()); // Add action listener
+        paginationPanel.add(jButtonPreviousPage);
+
+        jLabelPageInfo = new JLabel("Page 1 of 1"); // Initial text
+        jLabelPageInfo.setFont(new Font("Verdana", Font.PLAIN, 12));
+        jLabelPageInfo.setForeground(Color.WHITE);
+        paginationPanel.add(jLabelPageInfo);
+
+        jButtonNextPage = new JButton("Next");
+        stylePaginationButton(jButtonNextPage); // Apply styling
+        jButtonNextPage.addActionListener(e -> gotoNextPage()); // Add action listener
+        paginationPanel.add(jButtonNextPage);
+
+        panel.add(paginationPanel, BorderLayout.SOUTH); // Add pagination controls to the bottom
+        // >>> End Pagination Controls Panel <<<
+
         return panel;
     }
 
@@ -327,7 +392,7 @@ public class Inventory extends javax.swing.JPanel {
         gbc.gridwidth = 2; // Span across both columns
         gbc.fill = GridBagConstraints.HORIZONTAL; // Fill horizontally, but don't expand vertically
         gbc.weightx = 1.0; // Allow horizontal expansion
-        gbc.weighty = 0.0; // *** CHANGE: Prevent vertical expansion ***
+        gbc.weighty = 0.0; // Prevent vertical expansion
 
         JPanel imagePanel = new JPanel(new BorderLayout(0, 5)); // Small gap
         imagePanel.setOpaque(false);
@@ -403,7 +468,7 @@ public class Inventory extends javax.swing.JPanel {
         panel.add(component, gbc);
     }
 
-    // Creates the bottom panel with action buttons (Add, Save, Delete, Cancel)
+    // Creates the panel with action buttons (Add, Save, Delete, Cancel)
     private JPanel createActionPanel() {
         JPanel panel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 5));
         panel.setOpaque(false);
@@ -450,6 +515,35 @@ public class Inventory extends javax.swing.JPanel {
             BorderFactory.createEmptyBorder(5, 15, 5, 15) // Inner padding
         ));
     }
+
+     /**
+     * Helper method to style pagination/search buttons for dark theme.
+     */
+    private void stylePaginationButton(JButton button) {
+        button.setFont(new Font("Verdana", Font.PLAIN, 12));
+        button.setBackground(new Color(70, 70, 70)); // Slightly lighter gray
+        button.setForeground(Color.WHITE);
+        button.setFocusPainted(false);
+        button.setBorder(BorderFactory.createCompoundBorder(
+            BorderFactory.createLineBorder(Color.GRAY, 1),
+            BorderFactory.createEmptyBorder(3, 8, 3, 8) // Padding
+        ));
+    }
+
+    /**
+     * Helper method to style the Add Category button.
+     */
+    private void styleAddCategoryButton(JButton button) {
+        button.setFont(new Font("Verdana", Font.BOLD, 14)); // Slightly larger font
+        button.setBackground(new Color(155, 89, 182)); // Purple color
+        button.setForeground(Color.WHITE);
+        button.setFocusPainted(false);
+         button.setBorder(BorderFactory.createCompoundBorder(
+            BorderFactory.createLineBorder(new Color(128, 57, 153), 1), // Darker purple border
+            BorderFactory.createEmptyBorder(5, 15, 5, 15) // Inner padding
+        ));
+    }
+
 
     // Loads category names from the database into the filter and detail combo boxes
     private void loadCategories() {
@@ -563,62 +657,228 @@ public class Inventory extends javax.swing.JPanel {
         }
     }
 
-    // Loads inventory data from the database into the JTable (using SwingWorker for background loading)
+    // >>> Pagination and Search Methods <<<
+
+    /**
+     * Fetches the total number of items, applying the current search and category filters.
+     */
+    private void fetchTotalItemCount() {
+         String searchText = searchField.getText().trim().toLowerCase();
+         String selectedCategory = (String) categoryFilter.getSelectedItem();
+
+         // Construct the base SQL query
+         String sql = "SELECT COUNT(*) AS total FROM Items i JOIN Categories c ON i.CategoryID = c.CategoryID";
+         StringBuilder whereClause = new StringBuilder();
+
+         // Add search condition if search text is not empty
+         if (!searchText.isEmpty()) {
+             whereClause.append(" WHERE LOWER(i.ItemName) LIKE ?");
+         }
+
+         // Add category filter condition if a specific category is selected
+         boolean categorySelected = selectedCategory != null && !selectedCategory.equals("All Categories");
+         if (categorySelected) {
+             if (whereClause.length() == 0) {
+                 whereClause.append(" WHERE");
+             } else {
+                 whereClause.append(" AND");
+             }
+             whereClause.append(" c.CategoryName = ?");
+         }
+
+         // Append the where clause to the SQL query BEFORE preparing the statement
+         final String finalSql = sql + whereClause.toString();
+
+
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                int count = 0;
+                 try (Connection conn = DBConnection.getConnection();
+                      // Prepare the statement with the complete SQL query
+                     PreparedStatement pstmt = conn.prepareStatement(finalSql)) { // Use finalSql
+
+                    int paramIndex = 1;
+                    // Set search parameters if needed
+                    if (!searchText.isEmpty()) {
+                        pstmt.setString(paramIndex++, "%" + searchText + "%");
+                    }
+
+                    // Set category parameter if needed
+                    if (categorySelected) {
+                        pstmt.setString(paramIndex++, selectedCategory);
+                    }
+
+
+                    try (ResultSet rs = pstmt.executeQuery()) {
+                        if (rs.next()) {
+                            count = rs.getInt("total");
+                        }
+                    }
+
+                } catch (SQLException e) {
+                    e.printStackTrace();
+                    System.err.println("Error fetching total item count: " + e.getMessage());
+                    // Handle error appropriately, maybe set totalItems to -1 to indicate error
+                }
+
+                final int finalCount = count;
+                 SwingUtilities.invokeLater(new Runnable() {
+                    @Override
+                    public void run() {
+                        totalItems = finalCount;
+                        // Recalculate total pages based on the new total count
+                        int totalPagesAfter = (int) Math.ceil((double) totalItems / itemsPerPage);
+
+                        // Adjust current page if it exceeds the new total pages
+                        if (currentPage > totalPagesAfter && totalPagesAfter > 0) {
+                            currentPage = totalPagesAfter;
+                        } else if (totalPagesAfter == 0 && totalItems > 0) {
+                             // This case should ideally not happen if totalItems > 0
+                             currentPage = 1;
+                        } else if (totalPagesAfter == 0 && totalItems == 0) {
+                             currentPage = 1; // Still show page 1 even if no items
+                        }
+
+
+                        updatePaginationControls(); // Update controls based on total count and current page
+                        loadInventoryData(); // Fetch and display data for the current page with filter
+                    }
+                });
+            }
+        }).start();
+    }
+
+
+    // Loads inventory data from the database for the current page (using SwingWorker for background loading)
+    // Modified to include pagination and search/filter
     private void loadInventoryData() {
         if (conn == null) {
             System.err.println("Cannot load inventory: Database connection is null.");
             JOptionPane.showMessageDialog(this, "Database connection is not available. Cannot load inventory.", "Connection Error", JOptionPane.ERROR_MESSAGE);
             return;
         }
+
+        String searchText = searchField.getText().trim().toLowerCase();
+        String selectedCategory = (String) categoryFilter.getSelectedItem();
+        int offset = (currentPage - 1) * itemsPerPage;
+
+        // Build the SQL query dynamically
+        StringBuilder sql = new StringBuilder(
+                "SELECT i.ItemID, i.ItemName, c.CategoryName, i.CurrentQuantity, i.UnitPrice, i.MinimumQuantity, i.ItemImage "
+                + "FROM Items i JOIN Categories c ON i.CategoryID = c.CategoryID");
+        StringBuilder whereClause = new StringBuilder();
+
+         // Add search condition if search text is not empty
+         if (!searchText.isEmpty()) {
+             whereClause.append(" WHERE LOWER(i.ItemName) LIKE ?");
+         }
+
+         // Add category filter condition if a specific category is selected
+         boolean categorySelected = selectedCategory != null && !selectedCategory.equals("All Categories");
+         if (categorySelected) {
+             if (whereClause.length() == 0) {
+                 whereClause.append(" WHERE");
+             } else {
+                 whereClause.append(" AND");
+             }
+             whereClause.append(" c.CategoryName = ?");
+         }
+
+        sql.append(whereClause.toString());
+        sql.append(" ORDER BY i.ItemName LIMIT ? OFFSET ?"); // Add ordering and pagination
+
+        final String finalSql = sql.toString(); // Make sql final for the inner class
+
+
         // Use SwingWorker to load data in the background
-        new InventoryLoader().execute();
+        new InventoryLoader(finalSql, searchText, selectedCategory, categorySelected, offset, itemsPerPage).execute();
     }
 
-    // SwingWorker class to handle background database loading
+    // SwingWorker class to handle background database loading with pagination and filtering
     private class InventoryLoader extends SwingWorker<Void, Object[]> {
+
+        private final String sql;
+        private final String searchText;
+        private final String selectedCategory;
+        private final boolean categorySelected;
+        private final int offset;
+        private final int limit;
+
+        // Constructor to receive parameters
+        public InventoryLoader(String sql, String searchText, String selectedCategory, boolean categorySelected, int offset, int limit) {
+            this.sql = sql;
+            this.searchText = searchText;
+            this.selectedCategory = selectedCategory;
+            this.categorySelected = categorySelected;
+            this.offset = offset;
+            this.limit = limit;
+             // Clear table on EDT before starting background task
+             SwingUtilities.invokeLater(() -> tableModel.setRowCount(0));
+        }
+
 
         @Override
         protected Void doInBackground() throws Exception {
             System.out.println("InventoryLoader: Starting background data load...");
-            String sql = "SELECT i.ItemID, i.ItemName, c.CategoryName, i.CurrentQuantity, i.UnitPrice, i.MinimumQuantity, i.ItemImage " // Removed ItemImageType for now
-                    + "FROM Items i JOIN Categories c ON i.CategoryID = c.CategoryID ORDER BY i.ItemName"; // Added ORDER BY
+            // The SQL query is now passed in the constructor
 
-            try (PreparedStatement pstmt = conn.prepareStatement(sql); ResultSet rs = pstmt.executeQuery()) {
-                while (rs.next()) {
-                    int itemId = rs.getInt("ItemID");
-                    String itemName = rs.getString("ItemName");
-                    String categoryName = rs.getString("CategoryName");
-                    int currentQuantity = rs.getInt("CurrentQuantity");
-                    double unitPrice = rs.getDouble("UnitPrice");
-                    int minimumQuantity = rs.getInt("MinimumQuantity"); // Use this for status calculation
-                    byte[] imageData = rs.getBytes("ItemImage");
-                    ImageIcon thumbnailIcon = null;
+            try (Connection conn = DBConnection.getConnection(); // Get a new connection for the thread
+                 PreparedStatement pstmt = conn.prepareStatement(sql)) {
 
-                    // Create thumbnail if image data exists
-                    if (imageData != null && imageData.length > 0) {
-                        try {
-                            ImageIcon originalIcon = new ImageIcon(imageData);
-                            Image scaledImage = originalIcon.getImage().getScaledInstance(50, 50, Image.SCALE_SMOOTH);
-                            thumbnailIcon = new ImageIcon(scaledImage);
-                        } catch (Exception imgEx) {
-                            System.err.println("Error creating thumbnail for ItemID " + itemId + ": " + imgEx.getMessage());
-                            // thumbnailIcon remains null
+                int paramIndex = 1;
+                // Set search parameters if needed
+                if (!searchText.isEmpty()) {
+                    pstmt.setString(paramIndex++, "%" + searchText + "%");
+                }
+
+                // Set category parameter if needed
+                if (categorySelected) {
+                    pstmt.setString(paramIndex++, selectedCategory);
+                }
+
+                // Set pagination parameters
+                pstmt.setInt(paramIndex++, limit);
+                pstmt.setInt(paramIndex++, offset);
+
+
+                try (ResultSet rs = pstmt.executeQuery()) {
+                    while (rs.next()) {
+                        int itemId = rs.getInt("ItemID");
+                        String itemName = rs.getString("ItemName");
+                        String categoryName = rs.getString("CategoryName");
+                        int currentQuantity = rs.getInt("CurrentQuantity");
+                        double unitPrice = rs.getDouble("UnitPrice");
+                        int minimumQuantity = rs.getInt("MinimumQuantity"); // Use this for status calculation
+                        byte[] imageData = rs.getBytes("ItemImage");
+                        ImageIcon thumbnailIcon = null;
+
+                        // Create thumbnail if image data exists
+                        if (imageData != null && imageData.length > 0) {
+                            try {
+                                ImageIcon originalIcon = new ImageIcon(imageData);
+                                Image scaledImage = originalIcon.getImage().getScaledInstance(50, 50, Image.SCALE_SMOOTH);
+                                thumbnailIcon = new ImageIcon(scaledImage);
+                            } catch (Exception imgEx) {
+                                System.err.println("Error creating thumbnail for ItemID " + itemId + ": " + imgEx.getMessage());
+                                // thumbnailIcon remains null
+                            }
                         }
-                    }
 
-                    // Calculate total value and determine status
-                    double totalValue = currentQuantity * unitPrice;
-                    String status;
-                    if (currentQuantity <= 0) {
-                        status = "Out of Stock";
-                    } else if (currentQuantity <= minimumQuantity) {
-                        status = "Low Stock";
-                    } else {
-                        status = "In Stock";
-                    }
+                        // Calculate total value and determine status
+                        double totalValue = currentQuantity * unitPrice;
+                        String status;
+                        if (currentQuantity <= 0) {
+                            status = "Out of Stock";
+                        } else if (currentQuantity <= minimumQuantity) {
+                            status = "Low Stock";
+                        } else {
+                            status = "In Stock";
+                        }
 
-                    // Publish row data for processing on the EDT
-                    publish(new Object[]{itemId, itemName, categoryName, currentQuantity, unitPrice, totalValue, status, thumbnailIcon});
+                        // Publish row data for processing on the EDT
+                        publish(new Object[]{itemId, itemName, categoryName, currentQuantity, unitPrice, totalValue, status, thumbnailIcon});
+                    }
                 }
             } catch (SQLException e) {
                 System.err.println("Error loading inventory data in background: " + e.getMessage());
@@ -635,10 +895,6 @@ public class Inventory extends javax.swing.JPanel {
         @Override
         protected void process(java.util.List<Object[]> chunks) {
             for (Object[] rowData : chunks) {
-                // Format numeric values before adding to the model if needed,
-                // but it's better to let the table renderer handle formatting based on column class.
-                // Example: rowData[4] = Double.parseDouble(String.format("%.2f", rowData[4])); // Unit Price
-                // Example: rowData[5] = Double.parseDouble(String.format("%.2f", rowData[5])); // Total Value
                  tableModel.addRow(rowData);
             }
         }
@@ -656,84 +912,58 @@ public class Inventory extends javax.swing.JPanel {
                  // Re-enable search/filter components if they were disabled
             }
         }
-
-         // Constructor: Clear table before starting
-         public InventoryLoader() {
-             tableModel.setRowCount(0); // Clear table on EDT before starting background task
-             // Optionally disable search/filter components here
-         }
     }
 
 
-    // Searches the inventory based on text and category filters
+    // Searches the inventory based on text and category filters (now triggers total count fetch)
     private void searchInventory() {
-        String searchText = searchField.getText().trim().toLowerCase();
-        String selectedCategory = (String) categoryFilter.getSelectedItem();
-        tableModel.setRowCount(0); // Clear existing data
+        currentPage = 1; // Reset to first page on search
+        fetchTotalItemCount(); // Fetch total count with filter and then display data
+    }
 
-        if (conn == null) {
-            System.err.println("Cannot search inventory: Database connection is null.");
-            return;
-        }
+     /**
+     * Updates the state of the pagination buttons and the page info label.
+     */
+    private void updatePaginationControls() {
+        int totalPages = (int) Math.ceil((double) totalItems / itemsPerPage);
+        jLabelPageInfo.setText("Page " + currentPage + " of " + totalPages);
 
-        // Build the SQL query dynamically
-        StringBuilder sql = new StringBuilder(
-                "SELECT i.ItemID, i.ItemName, c.CategoryName, i.CurrentQuantity, i.UnitPrice, i.MinimumQuantity, i.ItemImage "
-                + "FROM Items i JOIN Categories c ON i.CategoryID = c.CategoryID WHERE LOWER(i.ItemName) LIKE ?");
+        jButtonPreviousPage.setEnabled(currentPage > 1);
+        jButtonNextPage.setEnabled(currentPage < totalPages);
 
-        boolean categorySelected = selectedCategory != null && !selectedCategory.equals("All Categories");
-        if (categorySelected) {
-            sql.append(" AND c.CategoryName = ?");
-        }
-        sql.append(" ORDER BY i.ItemName"); // Add ordering
-
-        try (PreparedStatement pstmt = conn.prepareStatement(sql.toString())) {
-            pstmt.setString(1, "%" + searchText + "%"); // Set search text parameter (always present)
-            if (categorySelected) {
-                pstmt.setString(2, selectedCategory); // Set category parameter if selected
-            }
-
-            ResultSet rs = pstmt.executeQuery();
-            while (rs.next()) {
-                 // --- Replicate data extraction logic from InventoryLoader ---
-                 int itemId = rs.getInt("ItemID");
-                 String itemName = rs.getString("ItemName");
-                 String categoryName = rs.getString("CategoryName");
-                 int currentQuantity = rs.getInt("CurrentQuantity");
-                 double unitPrice = rs.getDouble("UnitPrice");
-                 int minimumQuantity = rs.getInt("MinimumQuantity");
-                 byte[] imageData = rs.getBytes("ItemImage");
-                 ImageIcon thumbnailIcon = null;
-
-                 if (imageData != null && imageData.length > 0) {
-                     try {
-                         ImageIcon originalIcon = new ImageIcon(imageData);
-                         Image scaledImage = originalIcon.getImage().getScaledInstance(50, 50, Image.SCALE_SMOOTH);
-                         thumbnailIcon = new ImageIcon(scaledImage);
-                     } catch (Exception imgEx) {
-                         System.err.println("Error creating thumbnail during search for ItemID " + itemId + ": " + imgEx.getMessage());
-                     }
-                 }
-
-                 double totalValue = currentQuantity * unitPrice;
-                 String status;
-                 if (currentQuantity <= 0) {
-                     status = "Out of Stock";
-                 } else if (currentQuantity <= minimumQuantity) {
-                     status = "Low Stock";
-                 } else {
-                     status = "In Stock";
-                 }
-
-                 // Add row directly (search is usually faster, so background thread might be overkill)
-                 tableModel.addRow(new Object[]{itemId, itemName, categoryName, currentQuantity, unitPrice, totalValue, status, thumbnailIcon});
-            }
-        } catch (SQLException e) {
-            System.err.println("Error searching inventory: " + e.getMessage());
-            JOptionPane.showMessageDialog(this, "Failed to search inventory: " + e.getMessage(),
-                    "Database Error", JOptionPane.ERROR_MESSAGE);
+        // If there are no items (after filtering), disable both buttons
+        if (totalItems <= 0) {
+            jButtonPreviousPage.setEnabled(false);
+            jButtonNextPage.setEnabled(false);
+            jLabelPageInfo.setText("No items found");
         }
     }
+
+    /**
+     * Goes to the previous page of inventory data.
+     */
+    private void gotoPreviousPage() {
+        if (currentPage > 1) {
+            currentPage--;
+            loadInventoryData(); // Fetch data for the new page
+            updatePaginationControls(); // Update buttons
+        }
+    }
+
+    /**
+     * Goes to the next page of inventory data.
+     */
+    private void gotoNextPage() {
+        int totalPages = (int) Math.ceil((double) totalItems / itemsPerPage);
+        if (currentPage < totalPages) {
+            currentPage++;
+            loadInventoryData(); // Fetch data for the new page
+            updatePaginationControls(); // Update buttons
+        }
+    }
+
+    // >>> End Pagination Methods <<<
+
 
      /**
      * Loads details for a specific item ID from the database and populates the detail panel.
@@ -857,7 +1087,6 @@ public class Inventory extends javax.swing.JPanel {
         String successMessage;
         String logActivityType;
         String logDetails;
-        boolean isUpdateWithoutImage = false; // Flag to indicate special update case
 
         try {
             if (isNewItem) {
@@ -938,7 +1167,6 @@ public class Inventory extends javax.swing.JPanel {
                     }
                 } else {
                     // Update WITHOUT changing the image
-                    isUpdateWithoutImage = true; // Set flag
                     sql = "UPDATE Items SET ItemName = ?, CategoryID = ?, CurrentQuantity = ?, UnitPrice = ?, "
                          + "LastUpdatedAt = NOW(), MinimumQuantity = ?, Status = ?, Unit = ? " // Exclude image columns
                          + "WHERE ItemID = ?";
@@ -961,7 +1189,7 @@ public class Inventory extends javax.swing.JPanel {
             // Common actions after successful save
             JOptionPane.showMessageDialog(this, successMessage, "Success", JOptionPane.INFORMATION_MESSAGE);
             logActivity(logActivityType, logDetails);
-            loadInventoryData(); // Refresh table data
+            fetchTotalItemCount(); // Refresh table data by refetching count and then data
             hideDetailsPanel(); // Hide the details panel
 
         } catch (SQLException | IOException e) {
@@ -1034,7 +1262,7 @@ public class Inventory extends javax.swing.JPanel {
                 if (rowsAffected > 0) {
                     JOptionPane.showMessageDialog(this, "Item deleted successfully.", "Success", JOptionPane.INFORMATION_MESSAGE);
                     logActivity("Item Deleted", "Item '" + itemName + "' (ID: " + itemId + ") deleted"); // Log before hiding panel
-                    loadInventoryData(); // Refresh table
+                    fetchTotalItemCount(); // Refresh table by refetching count and then data
                     hideDetailsPanel(); // Hide details panel
                     // No duplicate logging needed here
                 } else {
@@ -1159,6 +1387,88 @@ public class Inventory extends javax.swing.JPanel {
         inventoryTable.clearSelection(); // Clear table selection
     }
 
+    // >>> Add Category Functionality <<<
+
+    /**
+     * Shows a dialog to add a new category.
+     */
+    private void showAddCategoryDialog() {
+        // Create a simple input dialog
+        String newCategoryName = JOptionPane.showInputDialog(this,
+                "Enter the name for the new category:",
+                "Add New Category",
+                JOptionPane.PLAIN_MESSAGE);
+
+        // If the user entered a name and didn't cancel
+        if (newCategoryName != null && !newCategoryName.trim().isEmpty()) {
+            addNewCategory(newCategoryName.trim());
+        } else if (newCategoryName != null) {
+            // If user clicked OK but entered empty string
+             JOptionPane.showMessageDialog(this, "Category name cannot be empty.", "Input Error", JOptionPane.WARNING_MESSAGE);
+        }
+        // If newCategoryName is null, user cancelled the dialog, do nothing.
+    }
+
+    /**
+     * Adds a new category to the database and refreshes the category combo boxes.
+     * @param categoryName The name of the new category.
+     */
+    private void addNewCategory(String categoryName) {
+        if (conn == null) {
+            JOptionPane.showMessageDialog(this, "Database connection is not available. Cannot add category.", "Connection Error", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+
+        // Check if category already exists (optional but recommended)
+        if (categoryExists(categoryName)) {
+            JOptionPane.showMessageDialog(this, "Category '" + categoryName + "' already exists.", "Duplicate Category", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+
+        String sql = "INSERT INTO Categories (CategoryName) VALUES (?)"; // Assuming Description is nullable or has default
+        try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            pstmt.setString(1, categoryName);
+            int rowsAffected = pstmt.executeUpdate();
+            if (rowsAffected > 0) {
+                JOptionPane.showMessageDialog(this, "Category '" + categoryName + "' added successfully.", "Success", JOptionPane.INFORMATION_MESSAGE);
+                logActivity("Category Added", "New category '" + categoryName + "' added"); // Log activity
+                loadCategories(); // Refresh the category combo boxes
+            } else {
+                JOptionPane.showMessageDialog(this, "Failed to add category.", "Database Error", JOptionPane.ERROR_MESSAGE);
+            }
+        } catch (SQLException e) {
+            System.err.println("Error adding new category: " + e.getMessage());
+            JOptionPane.showMessageDialog(this, "Failed to add category: " + e.getMessage(), "Database Error", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    /**
+     * Checks if a category with the given name already exists in the database.
+     * @param categoryName The name to check.
+     * @return true if the category exists, false otherwise.
+     */
+    private boolean categoryExists(String categoryName) {
+        String sql = "SELECT COUNT(*) FROM Categories WHERE CategoryName = ?";
+         if (conn == null) {
+            System.err.println("Cannot check category existence: Database connection is null.");
+            return false; // Assume it doesn't exist if no connection
+        }
+        try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            pstmt.setString(1, categoryName);
+            try (ResultSet rs = pstmt.executeQuery()) {
+                if (rs.next()) {
+                    return rs.getInt(1) > 0; // Return true if count is greater than 0
+                }
+            }
+        } catch (SQLException e) {
+             System.err.println("Error checking category existence: " + e.getMessage());
+        }
+        return false; // Assume it doesn't exist on error
+    }
+
+    // >>> End Add Category Functionality <<<
+
+    
     @SuppressWarnings("unchecked")
     // <editor-fold defaultstate="collapsed" desc="Generated Code">//GEN-BEGIN:initComponents
     private void initComponents() {

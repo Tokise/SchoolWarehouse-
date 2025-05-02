@@ -12,7 +12,10 @@ public class LoginFrame extends javax.swing.JFrame {
     
     public LoginFrame() {
         initComponents();
-        
+        setDefaultCloseOperation(javax.swing.WindowConstants.EXIT_ON_CLOSE);
+        // Center the frame on the screen
+        setLocationRelativeTo(null);
+   
     }
 
     
@@ -21,13 +24,13 @@ public class LoginFrame extends javax.swing.JFrame {
     private void initComponents() {
 
         jPanel1 = new javax.swing.JPanel();
-        jLabel1 = new javax.swing.JLabel();
         jLabel2 = new javax.swing.JLabel();
         jTextField1 = new javax.swing.JTextField();
         jLabel3 = new javax.swing.JLabel();
         jPasswordField1 = new javax.swing.JPasswordField();
         jCheckBox1 = new javax.swing.JCheckBox();
         jButton1 = new javax.swing.JButton();
+        jLabel4 = new javax.swing.JLabel();
 
         setDefaultCloseOperation(javax.swing.WindowConstants.EXIT_ON_CLOSE);
         setTitle("Login");
@@ -35,10 +38,6 @@ public class LoginFrame extends javax.swing.JFrame {
         setResizable(false);
 
         jPanel1.setBackground(new java.awt.Color(0, 0, 0));
-
-        jLabel1.setFont(new java.awt.Font("Verdana", 0, 14)); // NOI18N
-        jLabel1.setForeground(new java.awt.Color(255, 255, 255));
-        jLabel1.setText("NAME OF THE BRAND");
 
         jLabel2.setFont(new java.awt.Font("Verdana", 0, 14)); // NOI18N
         jLabel2.setForeground(new java.awt.Color(255, 255, 255));
@@ -80,35 +79,37 @@ public class LoginFrame extends javax.swing.JFrame {
             }
         });
 
+        jLabel4.setFont(new java.awt.Font("Copperplate Gothic Bold", 0, 24)); // NOI18N
+        jLabel4.setForeground(new java.awt.Color(255, 255, 255));
+        jLabel4.setText("AssetWise Academia");
+
         javax.swing.GroupLayout jPanel1Layout = new javax.swing.GroupLayout(jPanel1);
         jPanel1.setLayout(jPanel1Layout);
         jPanel1Layout.setHorizontalGroup(
             jPanel1Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
             .addGroup(jPanel1Layout.createSequentialGroup()
-                .addGroup(jPanel1Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.TRAILING)
-                    .addGroup(javax.swing.GroupLayout.Alignment.LEADING, jPanel1Layout.createSequentialGroup()
-                        .addGap(160, 160, 160)
-                        .addComponent(jButton1, javax.swing.GroupLayout.PREFERRED_SIZE, 195, javax.swing.GroupLayout.PREFERRED_SIZE))
+                .addGroup(jPanel1Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
                     .addGroup(jPanel1Layout.createSequentialGroup()
-                        .addContainerGap()
-                        .addGroup(jPanel1Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                            .addComponent(jLabel2)
-                            .addComponent(jTextField1, javax.swing.GroupLayout.PREFERRED_SIZE, 192, javax.swing.GroupLayout.PREFERRED_SIZE)
-                            .addComponent(jLabel3)
-                            .addComponent(jPasswordField1, javax.swing.GroupLayout.PREFERRED_SIZE, 195, javax.swing.GroupLayout.PREFERRED_SIZE)
-                            .addComponent(jCheckBox1))))
-                .addContainerGap(160, Short.MAX_VALUE))
-            .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, jPanel1Layout.createSequentialGroup()
-                .addGap(0, 0, Short.MAX_VALUE)
-                .addComponent(jLabel1)
-                .addGap(177, 177, 177))
+                        .addGap(114, 114, 114)
+                        .addComponent(jLabel4))
+                    .addGroup(jPanel1Layout.createSequentialGroup()
+                        .addGap(158, 158, 158)
+                        .addGroup(jPanel1Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.TRAILING)
+                            .addComponent(jButton1, javax.swing.GroupLayout.Alignment.LEADING, javax.swing.GroupLayout.PREFERRED_SIZE, 195, javax.swing.GroupLayout.PREFERRED_SIZE)
+                            .addGroup(jPanel1Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING, false)
+                                .addComponent(jLabel2)
+                                .addComponent(jLabel3)
+                                .addComponent(jPasswordField1, javax.swing.GroupLayout.PREFERRED_SIZE, 195, javax.swing.GroupLayout.PREFERRED_SIZE)
+                                .addComponent(jCheckBox1)
+                                .addComponent(jTextField1, javax.swing.GroupLayout.Alignment.TRAILING, javax.swing.GroupLayout.PREFERRED_SIZE, 195, javax.swing.GroupLayout.PREFERRED_SIZE)))))
+                .addContainerGap(122, Short.MAX_VALUE))
         );
         jPanel1Layout.setVerticalGroup(
             jPanel1Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
             .addGroup(jPanel1Layout.createSequentialGroup()
-                .addGap(20, 20, 20)
-                .addComponent(jLabel1)
-                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED, 55, Short.MAX_VALUE)
+                .addGap(43, 43, 43)
+                .addComponent(jLabel4)
+                .addGap(41, 41, 41)
                 .addComponent(jLabel2)
                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
                 .addComponent(jTextField1, javax.swing.GroupLayout.PREFERRED_SIZE, 30, javax.swing.GroupLayout.PREFERRED_SIZE)
@@ -120,7 +121,7 @@ public class LoginFrame extends javax.swing.JFrame {
                 .addComponent(jCheckBox1)
                 .addGap(33, 33, 33)
                 .addComponent(jButton1, javax.swing.GroupLayout.PREFERRED_SIZE, 35, javax.swing.GroupLayout.PREFERRED_SIZE)
-                .addGap(77, 77, 77))
+                .addContainerGap(58, Short.MAX_VALUE))
         );
 
         javax.swing.GroupLayout layout = new javax.swing.GroupLayout(getContentPane());
@@ -155,41 +156,61 @@ public class LoginFrame extends javax.swing.JFrame {
     }//GEN-LAST:event_jButton1ActionPerformed
     
     private void login() {
-    String username = jTextField1.getText();
-    String password = new String(jPasswordField1.getPassword());
+        String username = jTextField1.getText().trim();
+        String password = new String(jPasswordField1.getPassword());
 
-    String sql = "SELECT UserID, FullName, Role FROM Users WHERE Username = ? AND Password = ?"; // Ensure UserID is selected
+        // Query to get the hashed password and other user info
+        String sql = "SELECT UserID, FullName, Role, Password FROM Users WHERE Username = ?";
 
-    try (Connection conn = DBConnection.getConnection();
-     PreparedStatement pstmt = conn.prepareStatement(sql)) {
-    pstmt.setString(1, username);
-    pstmt.setString(2, password);
-    try (ResultSet rs = pstmt.executeQuery()) {
-        if (rs.next()) {
-            int userIdFromDB = rs.getInt("UserID"); // Retrieve UserID
-            String fullNameFromDB = rs.getString("FullName");
-            String roleFromDB = rs.getString("Role");
+        try (Connection conn = DBConnection.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
 
-            User loggedInUser = new User();
-            loggedInUser.setUserId(userIdFromDB); // Set the UserID in the User object
-            loggedInUser.setFullName(fullNameFromDB);
-            loggedInUser.setRole(roleFromDB);
-            loggedInUser.setUsername(username);
+            pstmt.setString(1, username);
 
-            System.out.println("Login Successful - User ID: " + loggedInUser.getUserId()); // Debug
+            try (ResultSet rs = pstmt.executeQuery()) {
+                if (rs.next()) {
+                    // User found by username, now verify password
+                    int userIdFromDB = rs.getInt("UserID");
+                    String fullNameFromDB = rs.getString("FullName");
+                    String roleFromDB = rs.getString("Role");
+                    String hashedPasswordFromDB = rs.getString("Password"); // Get the hashed password
 
-            DashBoardFrame1 dashboardFrame = new DashBoardFrame1(loggedInUser);
-            this.dispose(); // Close the login frame
-            dashboardFrame.showDashboard(); // ADD THIS LINE
-        } else {
-            JOptionPane.showMessageDialog(this, "Invalid credentials.", "Login Failed", JOptionPane.ERROR_MESSAGE);
+                    // Verify the entered password against the stored hashed password
+                    if (PasswordHasher.verifyPassword(password, hashedPasswordFromDB)) {
+                        // Password is correct, create User object and proceed
+                        User loggedInUser = new User();
+                        loggedInUser.setUserId(userIdFromDB);
+                        loggedInUser.setFullName(fullNameFromDB);
+                        loggedInUser.setRole(roleFromDB);
+                        loggedInUser.setUsername(username);
+
+                        System.out.println("Login Successful - User ID: " + loggedInUser.getUserId()); // Debug
+
+                        // Open the Dashboard
+                        DashBoardFrame1 dashboardFrame = new DashBoardFrame1(loggedInUser);
+                        dashboardFrame.setVisible(true); // Make dashboard visible
+                        dashboardFrame.showDashboard();
+                        this.dispose(); // Close the login frame
+
+                    } else {
+                        // Password does not match
+                        JOptionPane.showMessageDialog(this, "Invalid credentials.", "Login Failed", JOptionPane.ERROR_MESSAGE);
+                    }
+                } else {
+                    // Username not found
+                    JOptionPane.showMessageDialog(this, "Invalid credentials.", "Login Failed", JOptionPane.ERROR_MESSAGE);
+                }
+            }
+        } catch (SQLException ex) {
+            JOptionPane.showMessageDialog(this, "Database error: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+            ex.printStackTrace();
+        } catch (RuntimeException ex) {
+             // Catch exceptions from PasswordHasher (e.g., NoSuchAlgorithmException)
+             JOptionPane.showMessageDialog(this, "Error during password verification: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+             ex.printStackTrace();
         }
     }
-} catch (SQLException ex) {
-    JOptionPane.showMessageDialog(this, "Database error: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
-    ex.printStackTrace();
-}
-}
+
     
     
     
@@ -210,9 +231,9 @@ public class LoginFrame extends javax.swing.JFrame {
     // Variables declaration - do not modify//GEN-BEGIN:variables
     private javax.swing.JButton jButton1;
     private javax.swing.JCheckBox jCheckBox1;
-    private javax.swing.JLabel jLabel1;
     private javax.swing.JLabel jLabel2;
     private javax.swing.JLabel jLabel3;
+    private javax.swing.JLabel jLabel4;
     private javax.swing.JPanel jPanel1;
     private javax.swing.JPasswordField jPasswordField1;
     private javax.swing.JTextField jTextField1;

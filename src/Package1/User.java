@@ -5,7 +5,7 @@ public class User {
     private String fullName;
     private String role;
     private int userId; // Add this field
-
+    
     public String getUsername() {
         return username;
     }
@@ -36,5 +36,20 @@ public class User {
 
     public void setUserId(int userId) { // Add this setter
         this.userId = userId;
+    }
+    
+    // Helper method to check if the user is an admin
+    public boolean isAdmin() {
+        return "Admin".equals(role);
+    }
+
+    @Override
+    public String toString() {
+        return "User{" +
+               "userId=" + userId +
+               ", username='" + username + '\'' +
+               ", fullName='" + fullName + '\'' +
+               ", role='" + role + '\'' +
+               '}';
     }
 }

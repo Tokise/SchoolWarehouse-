@@ -24,6 +24,7 @@ public class Header extends javax.swing.JPanel {
     private void setIcons() {
     buttonBadges1.setIcon(loadIcon("/assets/noti.png"));
     buttonBadges3.setIcon(loadIcon("/assets/logout.png"));
+ 
 }
 
 private javax.swing.ImageIcon loadIcon(String path) {
@@ -54,8 +55,8 @@ private javax.swing.ImageIcon loadIcon(String path) {
     private void initComponents() {
 
         buttonBadges1 = new swing.ButtonBadges();
-        jLabel1 = new javax.swing.JLabel();
         buttonBadges3 = new swing.ButtonBadges();
+        jLabel2 = new javax.swing.JLabel();
 
         setBackground(new java.awt.Color(0, 0, 0));
 
@@ -66,10 +67,6 @@ private javax.swing.ImageIcon loadIcon(String path) {
             }
         });
 
-        jLabel1.setFont(new java.awt.Font("Verdana", 0, 18)); // NOI18N
-        jLabel1.setForeground(new java.awt.Color(255, 255, 255));
-        jLabel1.setText("School Warehouse Inventory Management System");
-
         buttonBadges3.setBackground(new java.awt.Color(51, 51, 51));
         buttonBadges3.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
@@ -77,32 +74,33 @@ private javax.swing.ImageIcon loadIcon(String path) {
             }
         });
 
+        jLabel2.setFont(new java.awt.Font("Copperplate Gothic Bold", 0, 35)); // NOI18N
+        jLabel2.setForeground(new java.awt.Color(255, 255, 255));
+        jLabel2.setText("AssetWise Academia");
+
         javax.swing.GroupLayout layout = new javax.swing.GroupLayout(this);
         this.setLayout(layout);
         layout.setHorizontalGroup(
             layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
             .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, layout.createSequentialGroup()
-                .addContainerGap(300, Short.MAX_VALUE)
-                .addComponent(jLabel1)
-                .addGap(171, 171, 171)
+                .addContainerGap(323, Short.MAX_VALUE)
+                .addComponent(jLabel2)
+                .addGap(251, 251, 251)
                 .addComponent(buttonBadges1, javax.swing.GroupLayout.PREFERRED_SIZE, 51, javax.swing.GroupLayout.PREFERRED_SIZE)
                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
                 .addComponent(buttonBadges3, javax.swing.GroupLayout.PREFERRED_SIZE, 51, javax.swing.GroupLayout.PREFERRED_SIZE)
-                .addGap(45, 45, 45))
+                .addGap(40, 40, 40))
         );
         layout.setVerticalGroup(
             layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
             .addGroup(layout.createSequentialGroup()
-                .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.TRAILING)
-                    .addComponent(buttonBadges1, javax.swing.GroupLayout.PREFERRED_SIZE, 45, javax.swing.GroupLayout.PREFERRED_SIZE)
-                    .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                        .addGroup(layout.createSequentialGroup()
-                            .addGap(25, 25, 25)
-                            .addComponent(jLabel1))
-                        .addGroup(layout.createSequentialGroup()
-                            .addGap(17, 17, 17)
-                            .addComponent(buttonBadges3, javax.swing.GroupLayout.PREFERRED_SIZE, 45, javax.swing.GroupLayout.PREFERRED_SIZE))))
-                .addContainerGap(17, Short.MAX_VALUE))
+                .addGap(20, 20, 20)
+                .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                    .addComponent(jLabel2)
+                    .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.TRAILING)
+                        .addComponent(buttonBadges1, javax.swing.GroupLayout.PREFERRED_SIZE, 45, javax.swing.GroupLayout.PREFERRED_SIZE)
+                        .addComponent(buttonBadges3, javax.swing.GroupLayout.PREFERRED_SIZE, 45, javax.swing.GroupLayout.PREFERRED_SIZE)))
+                .addContainerGap(19, Short.MAX_VALUE))
         );
     }// </editor-fold>//GEN-END:initComponents
 
@@ -118,6 +116,6 @@ private javax.swing.ImageIcon loadIcon(String path) {
     // Variables declaration - do not modify//GEN-BEGIN:variables
     private swing.ButtonBadges buttonBadges1;
     private swing.ButtonBadges buttonBadges3;
-    private javax.swing.JLabel jLabel1;
+    private javax.swing.JLabel jLabel2;
     // End of variables declaration//GEN-END:variables
 }
