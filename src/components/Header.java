@@ -9,22 +9,38 @@ import java.awt.geom.Area;
 import java.awt.geom.Rectangle2D;
 import java.awt.geom.RoundRectangle2D;
 
+// Import the main application frame class (assuming it's named DashBoardFrame1)
+import Package1.DashBoardFrame1;
+
 
 public class Header extends javax.swing.JPanel {
 
-   
+    // Add an instance variable to hold a reference to the parent frame (DashBoardFrame1)
+    private DashBoardFrame1 parentFrame;
+
     public Header() {
         initComponents();
          setOpaque(false);
-            this.setSize(1088, 685);               // Set specific size
+         // The size setting here might be overridden by the parent layout manager
+         // Consider setting preferred size instead if needed for layout
+         // this.setPreferredSize(new Dimension(1088, 685)); // Example preferred size
         setBackground(new Color(0,0,0));
          setIcons();
     }
-    
+
+    /**
+     * Setter for the parent frame. This should be called by the parent frame
+     * after creating the Header instance.
+     * @param frame The parent DashBoardFrame1 instance.
+     */
+    public void setParentFrame(DashBoardFrame1 frame) {
+        this.parentFrame = frame;
+    }
+
     private void setIcons() {
     buttonBadges1.setIcon(loadIcon("/assets/noti.png"));
     buttonBadges3.setIcon(loadIcon("/assets/logout.png"));
- 
+
 }
 
 private javax.swing.ImageIcon loadIcon(String path) {
@@ -109,7 +125,15 @@ private javax.swing.ImageIcon loadIcon(String path) {
     }//GEN-LAST:event_buttonBadges1ActionPerformed
 
     private void buttonBadges3ActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_buttonBadges3ActionPerformed
-        // TODO add your handling code here:
+         // This method is called when the logout button is clicked.
+        // We need to trigger the logout process in the parent frame.
+        if (parentFrame != null) {
+            parentFrame.logout(); // Call a logout method in the parent frame
+        } else {
+            System.err.println("Parent frame is not set in Header. Cannot perform logout.");
+            // Optionally show a message to the user
+            // JOptionPane.showMessageDialog(this, "Application error: Cannot perform logout.", "Error", JOptionPane.ERROR_MESSAGE);
+        }
     }//GEN-LAST:event_buttonBadges3ActionPerformed
 
 

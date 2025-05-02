@@ -1,4 +1,3 @@
-
 package Package1;
 
 import modules.Inventory;
@@ -27,14 +26,7 @@ public class DashBoardFrame1 extends javax.swing.JFrame {
         this.setVisible(true);
         showDashboard(); // Show dashboard by default
         contentPanel1.setLayout(new BorderLayout());
-
-        // Set the current user ID in the Inventory module
-        // This part might need adjustment based on how Inventory is instantiated
-        // if (dashboard != null) {
-        //     //  No direct way to access Inventory from dashboard here without knowing how it's created/managed
-        //     //  Ideally, when Inventory is created, pass the user ID
-        //     //  For now,  if Inventory is created elsewhere and accessible, modify that part
-        // }
+        header2.setParentFrame(this);
     }
 
     void showDashboard() {
@@ -63,12 +55,12 @@ public class DashBoardFrame1 extends javax.swing.JFrame {
             inventory.setCurrentUserId(user.getUserId()); // Set the user ID here
             System.out.println("DashBoardFrame1: Setting Inventory's User ID to: " + user.getUserId());
         } else {
-             System.err.println("DashBoardFrame1: User is null when trying to set Inventory's User ID!");
+            System.err.println("DashBoardFrame1: User is null when trying to set Inventory's User ID!");
         }
         setForm((JPanel) inventory);
     }
 
-   // Modified setForm for Users panel to pass the current user *after* adding the panel
+    // Modified setForm for Users panel to pass the current user *after* adding the panel
     public void setForm(Users users) {
         this.usersPanel = users; // Store the Users panel instance
 
@@ -102,7 +94,13 @@ public class DashBoardFrame1 extends javax.swing.JFrame {
     public void setForm(Settings settings) {
         setForm((JPanel) settings);
     }
-    
+
+    public void logout() {
+        this.dispose();
+        LoginFrame loginFrame = new LoginFrame();
+        loginFrame.setVisible(true);
+    }
+
     @SuppressWarnings("unchecked")
     // <editor-fold defaultstate="collapsed" desc="Generated Code">//GEN-BEGIN:initComponents
     private void initComponents() {
@@ -173,5 +171,4 @@ public class DashBoardFrame1 extends javax.swing.JFrame {
     private components.Sidebar sidebar1;
     // End of variables declaration//GEN-END:variables
 
- 
-}   
+}
