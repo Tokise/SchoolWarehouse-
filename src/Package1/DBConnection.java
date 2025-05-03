@@ -6,6 +6,6 @@ import java.sql.SQLException;
 
 public class DBConnection {
     public static Connection getConnection() throws SQLException {
-        return DriverManager.getConnection("jdbc:mysql://127.0.01:3307/warehouse", "root", "root"); // change password if needed
+        return DriverManager.getConnection("jdbc:mysql://127.0.01:3307/assetwise_academia", "root", "root"); // change password if needed
     }
 }

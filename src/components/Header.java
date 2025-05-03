@@ -9,30 +9,24 @@ import java.awt.geom.Area;
 import java.awt.geom.Rectangle2D;
 import java.awt.geom.RoundRectangle2D;
 
-// Import the main application frame class (assuming it's named DashBoardFrame1)
+
 import Package1.DashBoardFrame1;
 
 
 public class Header extends javax.swing.JPanel {
 
-    // Add an instance variable to hold a reference to the parent frame (DashBoardFrame1)
+    
     private DashBoardFrame1 parentFrame;
 
     public Header() {
         initComponents();
          setOpaque(false);
-         // The size setting here might be overridden by the parent layout manager
-         // Consider setting preferred size instead if needed for layout
-         // this.setPreferredSize(new Dimension(1088, 685)); // Example preferred size
+        
         setBackground(new Color(0,0,0));
          setIcons();
     }
 
-    /**
-     * Setter for the parent frame. This should be called by the parent frame
-     * after creating the Header instance.
-     * @param frame The parent DashBoardFrame1 instance.
-     */
+
     public void setParentFrame(DashBoardFrame1 frame) {
         this.parentFrame = frame;
     }
@@ -75,6 +69,7 @@ private javax.swing.ImageIcon loadIcon(String path) {
         jLabel2 = new javax.swing.JLabel();
 
         setBackground(new java.awt.Color(0, 0, 0));
+        setBorder(new javax.swing.border.SoftBevelBorder(javax.swing.border.BevelBorder.RAISED));
 
         buttonBadges1.setBackground(new java.awt.Color(51, 51, 51));
         buttonBadges1.addActionListener(new java.awt.event.ActionListener() {
@@ -99,7 +94,7 @@ private javax.swing.ImageIcon loadIcon(String path) {
         layout.setHorizontalGroup(
             layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
             .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, layout.createSequentialGroup()
-                .addContainerGap(323, Short.MAX_VALUE)
+                .addContainerGap(317, Short.MAX_VALUE)
                 .addComponent(jLabel2)
                 .addGap(251, 251, 251)
                 .addComponent(buttonBadges1, javax.swing.GroupLayout.PREFERRED_SIZE, 51, javax.swing.GroupLayout.PREFERRED_SIZE)
@@ -116,23 +111,21 @@ private javax.swing.ImageIcon loadIcon(String path) {
                     .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.TRAILING)
                         .addComponent(buttonBadges1, javax.swing.GroupLayout.PREFERRED_SIZE, 45, javax.swing.GroupLayout.PREFERRED_SIZE)
                         .addComponent(buttonBadges3, javax.swing.GroupLayout.PREFERRED_SIZE, 45, javax.swing.GroupLayout.PREFERRED_SIZE)))
-                .addContainerGap(19, Short.MAX_VALUE))
+                .addContainerGap(13, Short.MAX_VALUE))
         );
     }// </editor-fold>//GEN-END:initComponents
 
     private void buttonBadges1ActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_buttonBadges1ActionPerformed
-        // TODO add your handling code here:
+       
     }//GEN-LAST:event_buttonBadges1ActionPerformed
 
     private void buttonBadges3ActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_buttonBadges3ActionPerformed
-         // This method is called when the logout button is clicked.
-        // We need to trigger the logout process in the parent frame.
+       
         if (parentFrame != null) {
             parentFrame.logout(); // Call a logout method in the parent frame
         } else {
             System.err.println("Parent frame is not set in Header. Cannot perform logout.");
-            // Optionally show a message to the user
-            // JOptionPane.showMessageDialog(this, "Application error: Cannot perform logout.", "Error", JOptionPane.ERROR_MESSAGE);
+            
         }
     }//GEN-LAST:event_buttonBadges3ActionPerformed
 

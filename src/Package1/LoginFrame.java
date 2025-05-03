@@ -13,7 +13,7 @@ public class LoginFrame extends javax.swing.JFrame {
     public LoginFrame() {
         initComponents();
         setDefaultCloseOperation(javax.swing.WindowConstants.EXIT_ON_CLOSE);
-        // Center the frame on the screen
+       
         setLocationRelativeTo(null);
    
     }
@@ -159,7 +159,7 @@ public class LoginFrame extends javax.swing.JFrame {
         String username = jTextField1.getText().trim();
         String password = new String(jPasswordField1.getPassword());
 
-        // Query to get the hashed password and other user info
+       
         String sql = "SELECT UserID, FullName, Role, Password FROM Users WHERE Username = ?";
 
         try (Connection conn = DBConnection.getConnection();
@@ -169,15 +169,15 @@ public class LoginFrame extends javax.swing.JFrame {
 
             try (ResultSet rs = pstmt.executeQuery()) {
                 if (rs.next()) {
-                    // User found by username, now verify password
+                    
                     int userIdFromDB = rs.getInt("UserID");
                     String fullNameFromDB = rs.getString("FullName");
                     String roleFromDB = rs.getString("Role");
                     String hashedPasswordFromDB = rs.getString("Password"); // Get the hashed password
 
-                    // Verify the entered password against the stored hashed password
+                   
                     if (PasswordHasher.verifyPassword(password, hashedPasswordFromDB)) {
-                        // Password is correct, create User object and proceed
+                     
                         User loggedInUser = new User();
                         loggedInUser.setUserId(userIdFromDB);
                         loggedInUser.setFullName(fullNameFromDB);
@@ -186,18 +186,18 @@ public class LoginFrame extends javax.swing.JFrame {
 
                         System.out.println("Login Successful - User ID: " + loggedInUser.getUserId()); // Debug
 
-                        // Open the Dashboard
+                       
                         DashBoardFrame1 dashboardFrame = new DashBoardFrame1(loggedInUser);
                         dashboardFrame.setVisible(true); // Make dashboard visible
                         dashboardFrame.showDashboard();
-                        this.dispose(); // Close the login frame
+                        this.dispose(); 
 
                     } else {
-                        // Password does not match
+                       
                         JOptionPane.showMessageDialog(this, "Invalid credentials.", "Login Failed", JOptionPane.ERROR_MESSAGE);
                     }
                 } else {
-                    // Username not found
+                   
                     JOptionPane.showMessageDialog(this, "Invalid credentials.", "Login Failed", JOptionPane.ERROR_MESSAGE);
                 }
             }
@@ -205,7 +205,7 @@ public class LoginFrame extends javax.swing.JFrame {
             JOptionPane.showMessageDialog(this, "Database error: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
             ex.printStackTrace();
         } catch (RuntimeException ex) {
-             // Catch exceptions from PasswordHasher (e.g., NoSuchAlgorithmException)
+           
              JOptionPane.showMessageDialog(this, "Error during password verification: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
              ex.printStackTrace();
         }
@@ -215,7 +215,7 @@ public class LoginFrame extends javax.swing.JFrame {
     
     
     private void jTextField1ActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_jTextField1ActionPerformed
-        // TODO add your handling code here:
+      
     }//GEN-LAST:event_jTextField1ActionPerformed
 
     

@@ -1,6 +1,5 @@
 package modules;
 
-// Original imports kept
 import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Dimension;
@@ -13,8 +12,8 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
-import java.util.logging.Level; // Keep original logging imports
-import java.util.logging.Logger; // Keep original logging imports
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import javax.swing.BorderFactory;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
@@ -32,18 +31,15 @@ import org.jfree.chart.plot.PlotOrientation;
 import org.jfree.chart.renderer.category.BarRenderer;
 import org.jfree.data.category.DefaultCategoryDataset;
 import org.jfree.data.general.DefaultPieDataset;
-
-// Added imports for pagination and search
 import java.awt.FlowLayout;
 import javax.swing.JButton;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
-import javax.swing.JTextField; // Added for search field
+import javax.swing.JTextField;
 
 
 public class Dashboard extends javax.swing.JPanel {
 
-    // Original UI Components
     private JLabel totalItemsValueLabel;
     private JLabel lowStockValueLabel;
     private JLabel pendingOrdersValueLabel;
@@ -52,46 +48,37 @@ public class Dashboard extends javax.swing.JPanel {
     private DefaultPieDataset categoryDataset;
     private DefaultCategoryDataset movementDataset;
 
-    // *** ADDED: Pagination variables and UI components for Recent Activities ***
     private int currentPage = 1;
-    private final int itemsPerPage = 10; // Keep this or adjust as needed
+    private final int itemsPerPage = 10;
     private int totalActivities = 0;
     private int totalPages = 1;
     private JButton prevButton;
     private JButton nextButton;
     private JLabel pageInfoLabel;
-    private JTable recentActivitiesTable; // Keep reference if needed elsewhere
+    private JTable recentActivitiesTable;
 
-    // *** ADDED: Search components for Recent Activities ***
     private JTextField searchActivityField;
     private JButton searchActivityButton;
-    private String currentActivitySearchText = ""; // Store current search text
+    private String currentActivitySearchText = "";
 
 
-    // Original Database connection details
-    private static final String DB_URL = "jdbc:mysql://127.0.0.1:3307/warehouse";
+    private static final String DB_URL = "jdbc:mysql://127.0.0.1:3307/assetwise_academia";
     private static final String DB_USER = "root";
     private static final String DB_PASSWORD = "root";
 
     public Dashboard() {
         initComponents();
         setupDashboard();
-        // Initial data load called from constructor in original code
         fetchStatsData();
         fetchInventoryCategoryData();
         fetchInventoryMovementData();
-        // Initial fetch for activities now includes counting and pagination update
         fetchRecentActivities();
     }
 
-    // Original getConnection method
     private Connection getConnection() throws SQLException {
         return DriverManager.getConnection(DB_URL, DB_USER, DB_PASSWORD);
     }
 
-    // Removed updateDashboardData method as it wasn't in the original provided code
-
-    // Original setupDashboard method (no changes needed here)
     private void setupDashboard() {
         this.removeAll();
         this.setLayout(new BorderLayout(10, 10));
@@ -107,7 +94,7 @@ public class Dashboard extends javax.swing.JPanel {
         JPanel chartsPanel = createChartsPanel();
         centerPanel.add(chartsPanel);
 
-        JPanel recentActivitiesPanel = createRecentActivitiesPanel(); // Will now include pagination and search controls
+        JPanel recentActivitiesPanel = createRecentActivitiesPanel();
         centerPanel.add(recentActivitiesPanel);
 
         this.add(centerPanel, BorderLayout.CENTER);
@@ -115,13 +102,10 @@ public class Dashboard extends javax.swing.JPanel {
         JPanel quickAccessPanel = createQuickAccessPanel();
         this.add(quickAccessPanel, BorderLayout.SOUTH);
 
-        // Original code had setVisible here, usually done by the parent frame
-        // this.setVisible(true);
         this.revalidate();
         this.repaint();
     }
 
-    // Original createStatsPanel method (no changes)
     private JPanel createStatsPanel() {
         JPanel panel = new JPanel(new GridLayout(1, 4, 10, 0));
         panel.setOpaque(false);
@@ -145,7 +129,6 @@ public class Dashboard extends javax.swing.JPanel {
         return panel;
     }
 
-    // Original createStatBox method (no changes)
     private JPanel createStatBox(String title, String initialValue, Color color) {
         JPanel panel = new JPanel(new BorderLayout());
         panel.setBackground(color);
@@ -166,7 +149,6 @@ public class Dashboard extends javax.swing.JPanel {
         return panel;
     }
 
-    // Original createChartsPanel method (no changes)
     private JPanel createChartsPanel() {
         JPanel panel = new JPanel(new GridLayout(1, 2, 10, 0));
         panel.setOpaque(false);
@@ -186,7 +168,6 @@ public class Dashboard extends javax.swing.JPanel {
         return panel;
     }
 
-    // Original createPieChart method (no changes)
     private ChartPanel createPieChart(String title, DefaultPieDataset dataset) {
         JFreeChart chart = ChartFactory.createPieChart(
                 title,
@@ -204,7 +185,6 @@ public class Dashboard extends javax.swing.JPanel {
         return chartPanel;
     }
 
-    // Original createBarChart method (no changes)
     private ChartPanel createBarChart(String title, String categoryAxisLabel, String valueAxisLabel, DefaultCategoryDataset dataset) {
         JFreeChart chart = ChartFactory.createBarChart(
                 title,
@@ -220,8 +200,8 @@ public class Dashboard extends javax.swing.JPanel {
         CategoryPlot plot = (CategoryPlot) chart.getPlot();
         customizePlot(plot);
         BarRenderer renderer = (BarRenderer) plot.getRenderer();
-        renderer.setSeriesPaint(0, new Color(46, 204, 113)); // Green for incoming
-        renderer.setSeriesPaint(1, new Color(231, 76, 60));  // Red for outgoing
+        renderer.setSeriesPaint(0, new Color(46, 204, 113));
+        renderer.setSeriesPaint(1, new Color(231, 76, 60));
         plot.setRangeGridlinePaint(new Color(50, 50, 50));
         plot.getDomainAxis().setLabelPaint(Color.WHITE);
         plot.getDomainAxis().setTickLabelPaint(Color.WHITE);
@@ -233,7 +213,6 @@ public class Dashboard extends javax.swing.JPanel {
         return chartPanel;
     }
 
-    // Original customizeChart method (no changes)
     private void customizeChart(JFreeChart chart) {
         chart.setBackgroundPaint(new Color(30, 30, 30));
         chart.getTitle().setPaint(Color.WHITE);
@@ -241,22 +220,19 @@ public class Dashboard extends javax.swing.JPanel {
         chart.getLegend().setItemPaint(Color.WHITE);
     }
 
-    // Original customizePlot method (no changes)
     private void customizePlot(org.jfree.chart.plot.Plot plot) {
         plot.setBackgroundPaint(new Color(30, 30, 30));
         plot.setOutlinePaint(new Color(30, 30, 30));
     }
 
-    // *** MODIFIED: createRecentActivitiesPanel to add pagination and search controls ***
     private JPanel createRecentActivitiesPanel() {
-        JPanel panel = new JPanel(new BorderLayout(0, 5)); // Use BorderLayout to add pagination below
+        JPanel panel = new JPanel(new BorderLayout(0, 5));
         panel.setOpaque(false);
         panel.setBorder(BorderFactory.createTitledBorder(BorderFactory.createLineBorder(Color.GRAY),
                 "Recent Activities", javax.swing.border.TitledBorder.DEFAULT_JUSTIFICATION,
                 javax.swing.border.TitledBorder.DEFAULT_POSITION,
                 new Font("Verdana", Font.BOLD, 14), Color.WHITE));
 
-        // --- Search Panel for Activities ---
         JPanel searchPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 0));
         searchPanel.setOpaque(false);
 
@@ -270,18 +246,16 @@ public class Dashboard extends javax.swing.JPanel {
         searchPanel.add(searchActivityField);
 
         searchActivityButton = new JButton("Search");
-        stylePaginationButton(searchActivityButton); // Reuse styling for consistency
+        stylePaginationButton(searchActivityButton);
         searchActivityButton.addActionListener(e -> {
-            currentActivitySearchText = searchActivityField.getText().trim(); // Update search text
-            currentPage = 1; // Reset to first page on new search
-            fetchRecentActivities(); // Fetch data with the new search term
+            currentActivitySearchText = searchActivityField.getText().trim();
+            currentPage = 1;
+            fetchRecentActivities();
         });
         searchPanel.add(searchActivityButton);
 
-        panel.add(searchPanel, BorderLayout.NORTH); // Add search panel to the top
+        panel.add(searchPanel, BorderLayout.NORTH);
 
-
-        // --- Table Setup (Original) ---
         String[] columns = {"Date", "Activity", "User", "Details"};
         recentActivitiesModel = new DefaultTableModel(columns, 0) {
             @Override
@@ -290,68 +264,60 @@ public class Dashboard extends javax.swing.JPanel {
             }
         };
 
-        recentActivitiesTable = new JTable(recentActivitiesModel); // Assign to class member
-        // Original table styling
+        recentActivitiesTable = new JTable(recentActivitiesModel);
         recentActivitiesTable.setForeground(Color.WHITE);
-        recentActivitiesTable.setBackground(new Color(30, 30, 30)); // Match background
+        recentActivitiesTable.setBackground(new Color(30, 30, 30));
         recentActivitiesTable.setGridColor(new Color(50, 50, 50));
         recentActivitiesTable.getTableHeader().setFont(new Font("Verdana", Font.BOLD, 12));
         recentActivitiesTable.getTableHeader().setBackground(new Color(40, 40, 40));
         recentActivitiesTable.getTableHeader().setForeground(Color.WHITE);
-        // Set preferred column widths (adjust as needed) - Added from previous correct version
-        recentActivitiesTable.getColumnModel().getColumn(0).setPreferredWidth(140); // Timestamp
-        recentActivitiesTable.getColumnModel().getColumn(1).setPreferredWidth(100); // Activity Type
-        recentActivitiesTable.getColumnModel().getColumn(2).setPreferredWidth(120); // User
-        recentActivitiesTable.getColumnModel().getColumn(3).setPreferredWidth(300); // Details
+        recentActivitiesTable.getColumnModel().getColumn(0).setPreferredWidth(140);
+        recentActivitiesTable.getColumnModel().getColumn(1).setPreferredWidth(100);
+        recentActivitiesTable.getColumnModel().getColumn(2).setPreferredWidth(120);
+        recentActivitiesTable.getColumnModel().getColumn(3).setPreferredWidth(300);
 
         JScrollPane scrollPane = new JScrollPane(recentActivitiesTable);
-        scrollPane.getViewport().setBackground(new Color(30, 30, 30)); // Match background
-        panel.add(scrollPane, BorderLayout.CENTER); // Add table scroll pane to center
+        scrollPane.getViewport().setBackground(new Color(30, 30, 30));
+        panel.add(scrollPane, BorderLayout.CENTER);
 
-        // --- ADDED: Pagination Controls Panel ---
-        JPanel paginationPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 10, 0)); // Centered flow layout
-        paginationPanel.setOpaque(false); // Make background transparent
+        JPanel paginationPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 10, 0));
+        paginationPanel.setOpaque(false);
 
         prevButton = new JButton("<< Previous");
-        stylePaginationButton(prevButton); // Apply styling
-        prevButton.addActionListener(e -> changeActivityPage(-1)); // Add action listener
+        stylePaginationButton(prevButton);
+        prevButton.addActionListener(e -> changeActivityPage(-1));
 
-        pageInfoLabel = new JLabel("Page 1 of 1"); // Initial text
+        pageInfoLabel = new JLabel("Page 1 of 1");
         pageInfoLabel.setForeground(Color.WHITE);
         pageInfoLabel.setFont(new Font("Verdana", Font.PLAIN, 12));
 
         nextButton = new JButton("Next >>");
-        stylePaginationButton(nextButton); // Apply styling
-        nextButton.addActionListener(e -> changeActivityPage(1)); // Add action listener
+        stylePaginationButton(nextButton);
+        nextButton.addActionListener(e -> changeActivityPage(1));
 
         paginationPanel.add(prevButton);
         paginationPanel.add(pageInfoLabel);
         paginationPanel.add(nextButton);
 
-        panel.add(paginationPanel, BorderLayout.SOUTH); // Add pagination panel to the bottom
-
-        // updatePaginationControls(); // Set initial button states - called after fetchTotalActivityCount
+        panel.add(paginationPanel, BorderLayout.SOUTH);
 
         return panel;
     }
 
-    // *** ADDED: Helper method to style pagination/search buttons ***
     private void stylePaginationButton(JButton button) {
         button.setFont(new Font("Verdana", Font.PLAIN, 12));
-        button.setBackground(new Color(70, 70, 70)); // Slightly lighter gray
+        button.setBackground(new Color(70, 70, 70));
         button.setForeground(Color.WHITE);
         button.setFocusPainted(false);
         button.setBorder(BorderFactory.createCompoundBorder(
             BorderFactory.createLineBorder(Color.GRAY, 1),
-            BorderFactory.createEmptyBorder(3, 8, 3, 8) // Padding
+            BorderFactory.createEmptyBorder(3, 8, 3, 8)
         ));
     }
 
-    // Original fetchStatsData method (no changes)
     private void fetchStatsData() {
-        try (Connection dbConn = getConnection()) { // Get connection
+        try (Connection dbConn = getConnection()) {
 
-            // 1. Total Items
             try (PreparedStatement totalItemsStmt = dbConn.prepareStatement("SELECT COUNT(*) FROM Items");
                  ResultSet totalItemsRs = totalItemsStmt.executeQuery()) {
                 if (totalItemsRs.next()) {
@@ -361,11 +327,10 @@ public class Dashboard extends javax.swing.JPanel {
             } catch (SQLException e) {
                 System.err.println("Error fetching total items: " + e.getMessage());
                 e.printStackTrace();
-                logAndSetNA("total items", e);  // Use helper method
+                logAndSetNA("total items", e);
             }
 
-            // 2. Low Stock Items
-            try (PreparedStatement lowStockStmt = dbConn.prepareStatement("SELECT COUNT(*) FROM Items WHERE CurrentQuantity <= MinimumQuantity");
+            try (PreparedStatement lowStockStmt = dbConn.prepareStatement("SELECT COUNT(*) FROM Items WHERE Quantity <= ReorderLevel");
                  ResultSet lowStockRs = lowStockStmt.executeQuery()) {
                 if (lowStockRs.next()) {
                     final String lowStockItems = String.valueOf(lowStockRs.getInt(1));
@@ -377,8 +342,7 @@ public class Dashboard extends javax.swing.JPanel {
                 logAndSetNA("low stock", e);
             }
 
-            // 3. Pending Orders
-            try (PreparedStatement pendingOrdersStmt = dbConn.prepareStatement("SELECT COUNT(*) FROM Orders WHERE OrderStatus = 'Pending'"); // Corrected column name
+            try (PreparedStatement pendingOrdersStmt = dbConn.prepareStatement("SELECT COUNT(*) FROM PurchaseOrders WHERE Status = 'Pending'");
                  ResultSet pendingOrdersRs = pendingOrdersStmt.executeQuery()) {
                 if (pendingOrdersRs.next()) {
                     final String pendingOrders = String.valueOf(pendingOrdersRs.getInt(1));
@@ -390,7 +354,6 @@ public class Dashboard extends javax.swing.JPanel {
                 logAndSetNA("pending orders", e);
             }
 
-            // 4. Total Users
             try (PreparedStatement totalUsersStmt = dbConn.prepareStatement("SELECT COUNT(*) FROM Users");
                  ResultSet totalUsersRs = totalUsersStmt.executeQuery()) {
                 if (totalUsersRs.next()) {
@@ -406,22 +369,18 @@ public class Dashboard extends javax.swing.JPanel {
         } catch (SQLException e) {
             System.err.println("Error connecting to database or general SQL error: " + e.getMessage());
             e.printStackTrace();
-            // Optionally, show a more general error message to the user here
             SwingUtilities.invokeLater(() -> {
-                totalItemsValueLabel.setText("N/A");
-                lowStockValueLabel.setText("N/A");
-                pendingOrdersValueLabel.setText("N/A");
-                totalUsersValueLabel.setText("N/A");
+                if(totalItemsValueLabel != null) totalItemsValueLabel.setText("N/A");
+                if(lowStockValueLabel != null) lowStockValueLabel.setText("N/A");
+                if(pendingOrdersValueLabel != null) pendingOrdersValueLabel.setText("N/A");
+                if(totalUsersValueLabel != null) totalUsersValueLabel.setText("N/A");
             });
         }
     }
 
-    // Original logAndSetNA method (no changes)
     private void logAndSetNA(String statType, SQLException e) {
-        //  Consider using a proper logger here (e.g., java.util.logging or Log4j)
         System.err.println("Database error fetching " + statType + ": " + e.getMessage());
         SwingUtilities.invokeLater(() -> {
-            // Check if labels are initialized before setting text
             if(totalItemsValueLabel != null) totalItemsValueLabel.setText("N/A");
             if(lowStockValueLabel != null) lowStockValueLabel.setText("N/A");
             if(pendingOrdersValueLabel != null) pendingOrdersValueLabel.setText("N/A");
@@ -429,9 +388,8 @@ public class Dashboard extends javax.swing.JPanel {
         });
     }
 
-    // Original fetchUsername method (no changes)
     private String fetchUsername(int userId) {
-        String fullName = null; // Initialize locally, use more descriptive name
+        String fullName = null;
 
         String sql = "SELECT FullName FROM Users WHERE UserID = ?";
         try (Connection conn = getConnection();
@@ -442,22 +400,20 @@ public class Dashboard extends javax.swing.JPanel {
                 if (rs.next()) {
                     fullName = rs.getString("FullName");
                 } else {
-                    // Handle the case where the user ID is not found
                     System.err.println("Warning: User with ID " + userId + " not found.");
-                    fullName = "Unknown User"; // Or return null, or throw an exception, based on your needs
+                    fullName = "Unknown User";
                 }
             }
 
         } catch (SQLException e) {
             System.err.println("Error fetching full name for user ID " + userId + ": " + e.getMessage());
             e.printStackTrace();
-            fullName = "Error"; // Or return null, or throw an exception
+            fullName = "Error";
         }
 
         return fullName;
     }
 
-    // Original createQuickAccessPanel method (no changes)
     private JPanel createQuickAccessPanel() {
         JPanel panel = new JPanel(new GridLayout(1, 3, 20, 0));
         panel.setOpaque(false);
@@ -487,36 +443,30 @@ public class Dashboard extends javax.swing.JPanel {
         return panel;
     }
 
-    // *** MODIFIED: fetchRecentActivities to support pagination and search ***
     private void fetchRecentActivities() {
-        System.out.println("Fetching recent activities for page " + currentPage + " with search: '" + currentActivitySearchText + "'"); // Log current page and search
+        System.out.println("Fetching recent activities for page " + currentPage + " with search: '" + currentActivitySearchText + "'");
 
-        // --- Step 1: Count total activities with filter ---
-        // Define the WHERE clause for filtering activities consistently, including search
-        StringBuilder activityFilterClause = new StringBuilder("WHERE (ra.ActivityType LIKE 'Item Added%' OR ra.ActivityType LIKE 'Item Updated%' OR ra.ActivityType LIKE 'Item Deleted%' OR ra.ActivityType = 'New User' OR ra.ActivityType = 'User Login')"); // Include all relevant types
+        StringBuilder activityFilterClause = new StringBuilder("WHERE (ra.ActivityType LIKE 'Item Added%' OR ra.ActivityType LIKE 'Item Updated%' OR ra.ActivityType LIKE 'Item Deleted%' OR ra.ActivityType = 'New User' OR ra.ActivityType = 'User Login')");
 
-        // Add search condition if search text is not empty
         if (currentActivitySearchText != null && !currentActivitySearchText.isEmpty()) {
             activityFilterClause.append(" AND (ra.ActivityType LIKE ? OR ra.Details LIKE ? OR u.FullName LIKE ?)");
         }
 
-
         String countSql = "SELECT COUNT(*) FROM RecentActivities ra " +
-                          "LEFT JOIN Users u ON ra.UserID = u.UserID " + // Join Users table for searching by username
+                          "LEFT JOIN Users u ON ra.UserID = u.UserID " +
                           activityFilterClause.toString();
 
-        totalActivities = 0; // Reset count before fetching
-        totalPages = 1; // Default to 1 page
+        totalActivities = 0;
+        totalPages = 1;
 
         try (Connection dbConn = getConnection();
              PreparedStatement countPstmt = dbConn.prepareStatement(countSql)) {
 
-            // Set search parameters for the count query
             if (currentActivitySearchText != null && !currentActivitySearchText.isEmpty()) {
                 String searchTerm = "%" + currentActivitySearchText.toLowerCase() + "%";
-                countPstmt.setString(1, searchTerm); // Search in ActivityType
-                countPstmt.setString(2, searchTerm); // Search in Details
-                countPstmt.setString(3, searchTerm); // Search in User FullName
+                countPstmt.setString(1, searchTerm);
+                countPstmt.setString(2, searchTerm);
+                countPstmt.setString(3, searchTerm);
             }
 
             try (ResultSet countRs = countPstmt.executeQuery()) {
@@ -525,66 +475,55 @@ public class Dashboard extends javax.swing.JPanel {
                 }
             }
 
-            // Calculate total pages based on the count
             totalPages = (int) Math.ceil((double) totalActivities / itemsPerPage);
             if (totalPages == 0) {
-                totalPages = 1; // Ensure at least one page even if empty
+                totalPages = 1;
             }
-            // Ensure current page is not beyond the new total pages after filtering
             if (currentPage > totalPages) {
                 currentPage = totalPages;
             }
             if (currentPage < 1 && totalPages >= 1) {
-                currentPage = 1; // Reset to page 1 if it somehow goes below 1
+                currentPage = 1;
             }
 
-
-            System.out.println("Total activities (filtered): " + totalActivities + ", Total pages: " + totalPages); // Log count and pages
+            System.out.println("Total activities (filtered): " + totalActivities + ", Total pages: " + totalPages);
 
         } catch (SQLException e) {
             System.err.println("Error counting recent activities with filter: " + e.getMessage());
             e.printStackTrace();
-            // Keep totalPages = 1, totalActivities = 0 on error
         }
 
-        // --- Step 2: Fetch activities for the current page with filter ---
-        // Clear table model *before* adding new rows for the current page
-        // Ensure this runs on the EDT
         SwingUtilities.invokeLater(() -> recentActivitiesModel.setRowCount(0));
 
         DateTimeFormatter dtf = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
-        int offset = (currentPage - 1) * itemsPerPage; // Calculate offset for SQL query
+        int offset = (currentPage - 1) * itemsPerPage;
 
-        // Use the same filter clause and add ordering, LIMIT, OFFSET
         String dataSql = "SELECT ra.ActivityDate, ra.ActivityType, u.FullName AS UserName, ra.Details " +
                          "FROM RecentActivities ra " +
                          "LEFT JOIN Users u ON ra.UserID = u.UserID " +
-                         activityFilterClause.toString() + // Use the defined filter
-                         " ORDER BY ra.ActivityDate DESC " + // Order by date descending
-                         "LIMIT ? OFFSET ?"; // Placeholders for LIMIT and OFFSET
+                         activityFilterClause.toString() +
+                         " ORDER BY ra.ActivityDate DESC " +
+                         "LIMIT ? OFFSET ?";
 
         try (Connection dbConn = getConnection();
              PreparedStatement pstmt = dbConn.prepareStatement(dataSql)) {
 
             int paramIndex = 1;
-             // Set search parameters for the data query
             if (currentActivitySearchText != null && !currentActivitySearchText.isEmpty()) {
                 String searchTerm = "%" + currentActivitySearchText.toLowerCase() + "%";
-                pstmt.setString(paramIndex++, searchTerm); // Search in ActivityType
-                pstmt.setString(paramIndex++, searchTerm); // Search in Details
-                pstmt.setString(paramIndex++, searchTerm); // Search in User FullName
+                pstmt.setString(paramIndex++, searchTerm);
+                pstmt.setString(paramIndex++, searchTerm);
+                pstmt.setString(paramIndex++, searchTerm);
             }
 
-            pstmt.setInt(paramIndex++, itemsPerPage); // Set LIMIT parameter
-            pstmt.setInt(paramIndex++, offset);       // Set OFFSET parameter
-
+            pstmt.setInt(paramIndex++, itemsPerPage);
+            pstmt.setInt(paramIndex++, offset);
 
             try (ResultSet rs = pstmt.executeQuery()) {
                 boolean dataFoundOnPage = false;
                 while (rs.next()) {
-                    dataFoundOnPage = true; // Mark that we found data
+                    dataFoundOnPage = true;
                     LocalDateTime dateTime = null;
-                    // Use ActivityDate as per original schema
                     if (rs.getTimestamp("ActivityDate") != null) {
                         dateTime = rs.getTimestamp("ActivityDate").toLocalDateTime();
                     }
@@ -592,23 +531,21 @@ public class Dashboard extends javax.swing.JPanel {
                     String activityType = rs.getString("ActivityType");
                     String userName = rs.getString("UserName");
                     String details = rs.getString("Details");
-                    String displayUser = (userName != null && !userName.trim().isEmpty()) ? userName : "System/Unknown"; // Handle null username
+                    String displayUser = (userName != null && !userName.trim().isEmpty()) ? userName : "System/Unknown";
 
-                    // Add row to model on EDT
                     final Object[] rowData = {formattedDate, activityType, displayUser, details};
                     SwingUtilities.invokeLater(() -> recentActivitiesModel.addRow(rowData));
                 }
-                // Handle case where no activities are found at all or on the current page
                  if (!dataFoundOnPage && totalActivities == 0) {
                      System.out.println("No activities found in total (with filter).");
                      SwingUtilities.invokeLater(() -> {
-                         recentActivitiesModel.setRowCount(0); // Ensure table is truly empty
+                         recentActivitiesModel.setRowCount(0);
                          recentActivitiesModel.addRow(new Object[]{"", "No matching activities found", "", ""});
                      });
                  } else if (!dataFoundOnPage) {
                      System.out.println("No activities found on page " + currentPage + " (with filter).");
                       SwingUtilities.invokeLater(() -> {
-                          recentActivitiesModel.setRowCount(0); // Ensure table is truly empty
+                          recentActivitiesModel.setRowCount(0);
                           recentActivitiesModel.addRow(new Object[]{"", "No activities on this page", "", ""});
                       });
                  }
@@ -617,47 +554,38 @@ public class Dashboard extends javax.swing.JPanel {
         } catch (SQLException e) {
             System.err.println("Error fetching recent activities data for page " + currentPage + " with filter: " + e.getMessage());
             e.printStackTrace();
-            // Display error in the table on EDT
             SwingUtilities.invokeLater(() -> {
-                recentActivitiesModel.setRowCount(0); // Clear table on error
+                recentActivitiesModel.setRowCount(0);
                 recentActivitiesModel.addRow(new Object[]{"N/A", "Error", "System", "Could not fetch activities"});
             });
         } finally {
-            // Update pagination controls state on EDT after fetching
             SwingUtilities.invokeLater(this::updatePaginationControls);
         }
     }
 
-    // *** ADDED: Method to handle changing pages ***
     private void changeActivityPage(int direction) {
         int newPage = currentPage + direction;
-        // Check bounds before changing page and fetching
         if (newPage >= 1 && newPage <= totalPages) {
             currentPage = newPage;
-            // Fetch data for the new page. Run in a separate thread
-            // to avoid blocking the EDT during database access.
             new Thread(this::fetchRecentActivities).start();
         } else {
              System.out.println("Change page ignored: newPage (" + newPage + ") out of bounds (1-" + totalPages + ")");
         }
     }
 
-    // *** ADDED: Method to update the enabled state and text of pagination controls ***
     private void updatePaginationControls() {
-        // Ensure components are initialized before accessing them
         if (pageInfoLabel != null) {
             pageInfoLabel.setText("Page " + currentPage + " of " + totalPages);
         }
         if (prevButton != null) {
-            prevButton.setEnabled(currentPage > 1); // Enable only if not on the first page
+            prevButton.setEnabled(currentPage > 1);
         }
         if (nextButton != null) {
-            nextButton.setEnabled(currentPage < totalPages); // Enable only if not on the last page
+            nextButton.setEnabled(currentPage < totalPages);
         }
          System.out.println("Pagination controls updated: Page " + currentPage + "/" + totalPages);
     }
 
-    // Original fetchInventoryCategoryData method (no changes)
     private void fetchInventoryCategoryData() {
         categoryDataset.clear();
         String sql = "SELECT c.CategoryName, COUNT(i.ItemID) AS ItemCount FROM Categories c LEFT JOIN Items i ON c.CategoryID = i.CategoryID GROUP BY c.CategoryName";
@@ -676,10 +604,8 @@ public class Dashboard extends javax.swing.JPanel {
         }
     }
 
-    // Original fetchInventoryMovementData method (no changes)
     private void fetchInventoryMovementData() {
         movementDataset.clear();
-        // Example: Fetch incoming and outgoing inventory for the last 4 months (MySQL)
         String sql = "SELECT " +
                      "    DATE_FORMAT(TransactionDate, '%Y-%m') AS Month, " +
                      "    TransactionType, " +
@@ -705,7 +631,7 @@ public class Dashboard extends javax.swing.JPanel {
                 movementDataset.addValue(0, "Issued", "Error");
             });
         }
-    }        
+    }
     @SuppressWarnings("unchecked")
     // <editor-fold defaultstate="collapsed" desc="Generated Code">//GEN-BEGIN:initComponents
     private void initComponents() {
