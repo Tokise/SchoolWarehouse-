@@ -1,22 +1,19 @@
 package modules;
 
 import Package1.DBConnection;
+import Package1.User;
+
 import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Component;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
 import java.awt.Font;
-import java.awt.GridBagConstraints;
-import java.awt.GridBagLayout;
+import java.awt.Frame;
 import java.awt.Image;
-import java.awt.Insets;
 import java.awt.event.ActionEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.IOException;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -27,7 +24,6 @@ import javax.swing.BorderFactory;
 import javax.swing.ImageIcon;
 import javax.swing.JButton;
 import javax.swing.JComboBox;
-import javax.swing.JFileChooser;
 import javax.swing.JLabel;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
@@ -37,36 +33,22 @@ import javax.swing.JTextField;
 import javax.swing.SwingConstants;
 import javax.swing.SwingUtilities;
 import javax.swing.SwingWorker;
-import javax.swing.filechooser.FileNameExtensionFilter;
 import javax.swing.table.DefaultTableModel;
 import javax.swing.table.DefaultTableCellRenderer;
 
+// Import the new dialog class and its listener interface
+import modules.ItemDetailsDialog.ItemDetailsListener;
 
-public class Inventory extends javax.swing.JPanel {
+
+public class Inventory extends javax.swing.JPanel implements ItemDetailsListener { // Implement the listener interface
 
     private JTable inventoryTable;
     private JTextField searchField;
     private JComboBox<String> categoryFilter;
     private DefaultTableModel tableModel;
 
-    private JPanel detailPanel;
-    private JTextField itemIdField;
-    private JTextField nameField;
-    private JComboBox<String> categoryField;
-    private JTextField quantityField;
-    private JTextField reorderLevelField;
-    private JComboBox<String> unitField;
-    private JLabel imageLabel;
-    private File selectedImageFile;
-    private String selectedImageType;
-    private boolean isNewItem = true;
-
-    private JButton saveButton;
-    private JButton deleteButton;
-    private JButton cancelButton;
-
     private Connection conn = null;
-    private int currentUserId;
+    private User currentUser;
 
     private int currentPage = 1;
     private final int itemsPerPage = 10;
@@ -77,22 +59,75 @@ public class Inventory extends javax.swing.JPanel {
 
     private JButton jButtonAddCategory;
 
+    // SwingWorker for loading data - Keep track of the current loading task
+    private InventoryLoader currentDataLoader;
+
 
     public Inventory() {
-        if (!connectToDatabase()) {
-            JOptionPane.showMessageDialog(this, "Database connection failed. Inventory features disabled.", "Connection Error", JOptionPane.ERROR_MESSAGE);
-        }
         initComponents();
         setupInventoryPanel();
-        loadCategories();
+        if (!connectToDatabase()) {
+            JOptionPane.showMessageDialog(this, "Database connection failed. Inventory features disabled.", "Connection Error", JOptionPane.ERROR_MESSAGE);
+        } else {
+            loadCategories();
+            // Initial load: fetch total count, which will then trigger data load
+            fetchTotalItemCount();
+        }
     }
 
+    public void setCurrentUser(User user) {
+        this.currentUser = user;
+        if (this.currentUser != null) {
+            System.out.println("Inventory: User object set. UserID: " + this.currentUser.getUserId() + ", Username: " + this.currentUser.getUsername());
+        } else {
+            System.out.println("Inventory: Current user is null.");
+        }
+        currentPage = 1;
+        fetchTotalItemCount(); // Refresh data based on user (though Inventory view is generic)
+    }
 
     public void setCurrentUserId(int userId) {
-        this.currentUserId = userId;
-        System.out.println("Inventory: UserID set to " + this.currentUserId);
-        currentPage = 1;
-        fetchTotalItemCount();
+        System.out.println("Inventory: setCurrentUserId(int) called with UserID: " + userId);
+        if (userId <= 0) {
+            System.err.println("Inventory: Invalid UserID passed to setCurrentUserId: " + userId);
+            setCurrentUser(null);
+            return;
+        }
+
+        User user = fetchUserById(userId);
+        if (user == null) {
+            System.err.println("Inventory: Failed to fetch user details for UserID: " + userId + ". Operations requiring a user may fail or use default permissions.");
+        }
+        setCurrentUser(user);
+    }
+
+     private User fetchUserById(int userId) {
+        if (conn == null) {
+            if (!connectToDatabase()) {
+                 System.err.println("Inventory.fetchUserById: Database connection is not available.");
+                 return null;
+            }
+        }
+        String sql = "SELECT UserID, Username, FullName, Role FROM Users WHERE UserID = ?";
+        try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            pstmt.setInt(1, userId);
+            try (ResultSet rs = pstmt.executeQuery()) {
+                if (rs.next()) {
+                    User user = new User();
+                    user.setUserId(rs.getInt("UserID"));
+                    user.setUsername(rs.getString("Username"));
+                    user.setFullName(rs.getString("FullName"));
+                    user.setRole(rs.getString("Role"));
+                    return user;
+                } else {
+                    System.err.println("Inventory.fetchUserById: No user found with UserID: " + userId);
+                }
+            }
+        } catch (SQLException e) {
+            System.err.println("Inventory.fetchUserById: SQL error fetching user with ID " + userId + ": " + e.getMessage());
+            e.printStackTrace();
+        }
+        return null;
     }
 
 
@@ -100,18 +135,17 @@ public class Inventory extends javax.swing.JPanel {
         try {
             conn = DBConnection.getConnection();
             if (conn != null && !conn.isClosed()) {
-                System.out.println("Database connected successfully");
+                System.out.println("Database connected successfully in Inventory");
                 return true;
             } else {
-                System.err.println("Failed to establish database connection.");
+                System.err.println("Failed to establish database connection in Inventory.");
                 return false;
             }
         } catch (SQLException ex) {
-            Logger.getLogger(Inventory.class.getName()).log(Level.SEVERE, "Database connection error", ex);
+            Logger.getLogger(Inventory.class.getName()).log(Level.SEVERE, "Database connection error in Inventory", ex);
             return false;
         }
     }
-
 
     private void setupInventoryPanel() {
         this.setLayout(new BorderLayout(10, 10));
@@ -121,17 +155,13 @@ public class Inventory extends javax.swing.JPanel {
         JPanel searchFilterPanel = createSearchFilterPanel();
         this.add(searchFilterPanel, BorderLayout.NORTH);
 
-        JPanel centerPanel = new JPanel(new BorderLayout(10, 0));
+        JPanel centerPanel = new JPanel(new BorderLayout()); // Use BorderLayout for center
         centerPanel.setOpaque(false);
 
         JPanel tablePanel = createInventoryTablePanel();
-        centerPanel.add(tablePanel, BorderLayout.CENTER);
+        centerPanel.add(tablePanel, BorderLayout.CENTER); // Table panel takes center
 
-        detailPanel = createItemDetailsPanel();
-        detailPanel.setVisible(false);
-        centerPanel.add(detailPanel, BorderLayout.EAST);
-
-        this.add(centerPanel, BorderLayout.CENTER);
+        this.add(centerPanel, BorderLayout.CENTER); // Center panel takes center of main panel
 
         JPanel bottomPanel = new JPanel(new BorderLayout());
         bottomPanel.setOpaque(false);
@@ -144,7 +174,7 @@ public class Inventory extends javax.swing.JPanel {
         addCategoryPanel.add(jButtonAddCategory);
         bottomPanel.add(addCategoryPanel, BorderLayout.WEST);
 
-        JPanel actionPanel = createActionPanel();
+        JPanel actionPanel = createActionPanel(); // Action buttons remain at the bottom
         bottomPanel.add(actionPanel, BorderLayout.EAST);
 
         this.add(bottomPanel, BorderLayout.SOUTH);
@@ -159,16 +189,16 @@ public class Inventory extends javax.swing.JPanel {
                     if (itemIdObj != null) {
                         try {
                             int itemId = Integer.parseInt(itemIdObj.toString());
-                            loadItemDetails(itemId);
+                            openItemDetailsDialog(itemId); // Open dialog for selected item
                         } catch (NumberFormatException e) {
                             System.err.println("Error parsing Item ID from table: " + itemIdObj);
+                            JOptionPane.showMessageDialog(Inventory.this, "Invalid Item ID in table.", "Error", JOptionPane.ERROR_MESSAGE);
                         }
                     }
                 }
             }
         });
     }
-
 
     private JPanel createSearchFilterPanel() {
         JPanel panel = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 5));
@@ -203,7 +233,6 @@ public class Inventory extends javax.swing.JPanel {
         return panel;
     }
 
-
     private JPanel createInventoryTablePanel() {
         JPanel panel = new JPanel(new BorderLayout());
         panel.setOpaque(false);
@@ -212,8 +241,7 @@ public class Inventory extends javax.swing.JPanel {
                 javax.swing.border.TitledBorder.DEFAULT_POSITION,
                 new Font("Verdana", Font.BOLD, 14), Color.WHITE));
 
-        // Removed "Unit" column from the table definition
-        String[] columns = {"Item ID", "Name", "Category", "Quantity", "Status", "Image"};
+        String[] columns = {"ID", "Name", "Category", "Qty", "Unit", "Status", "Condition", "Machine Status", "Image"};
         tableModel = new DefaultTableModel(columns, 0) {
             @Override
             public boolean isCellEditable(int row, int column) {
@@ -222,16 +250,10 @@ public class Inventory extends javax.swing.JPanel {
 
             @Override
             public Class<?> getColumnClass(int columnIndex) {
-                switch (columnIndex) {
-                    case 0:
-                        return Integer.class;
-                    case 3:
-                        return String.class;
-                    case 5: // Image is now at index 5
-                        return ImageIcon.class;
-                    default:
-                        return String.class;
+                if (columnIndex == 8) {
+                    return ImageIcon.class;
                 }
+                return super.getColumnClass(columnIndex);
             }
         };
 
@@ -250,18 +272,16 @@ public class Inventory extends javax.swing.JPanel {
         inventoryTable.getTableHeader().setForeground(Color.WHITE);
         inventoryTable.getTableHeader().setReorderingAllowed(false);
 
-        // Custom Cell Renderer for centering text in columns
         DefaultTableCellRenderer centerRenderer = new DefaultTableCellRenderer();
         centerRenderer.setHorizontalAlignment(JLabel.CENTER);
 
-        // Apply center renderer to relevant columns (indices updated)
-        inventoryTable.getColumnModel().getColumn(0).setCellRenderer(centerRenderer); // Item ID
-        inventoryTable.getColumnModel().getColumn(1).setCellRenderer(centerRenderer); // Name
-        inventoryTable.getColumnModel().getColumn(2).setCellRenderer(centerRenderer); // Category
-        inventoryTable.getColumnModel().getColumn(3).setCellRenderer(centerRenderer); // Quantity
+        for (int i = 0; i < inventoryTable.getColumnCount(); i++) {
+            if (i != 8) {
+                 inventoryTable.getColumnModel().getColumn(i).setCellRenderer(centerRenderer);
+            }
+        }
 
-        // Custom Cell Renderer for Status Column (Index 4) - Center Align and Color (Index updated)
-        inventoryTable.getColumnModel().getColumn(4).setCellRenderer(new DefaultTableCellRenderer() {
+        inventoryTable.getColumnModel().getColumn(5).setCellRenderer(new DefaultTableCellRenderer() {
             @Override
             public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected, boolean hasFocus, int row, int column) {
                 Component c = super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
@@ -269,29 +289,31 @@ public class Inventory extends javax.swing.JPanel {
                 if ("Low Stock".equalsIgnoreCase(status)) {
                     c.setForeground(new Color(231, 76, 60));
                 } else if ("Out of Stock".equalsIgnoreCase(status)) {
-                    c.setForeground(new Color(255, 165, 0));
+                    c.setForeground(Color.ORANGE);
                 } else if ("In Stock".equalsIgnoreCase(status)) {
                     c.setForeground(new Color(46, 204, 113));
                 } else {
                     c.setForeground(isSelected ? table.getSelectionForeground() : Color.WHITE);
                 }
                 c.setBackground(isSelected ? table.getSelectionBackground() : table.getBackground());
-                setHorizontalAlignment(JLabel.CENTER); // Ensure centering
+                setHorizontalAlignment(JLabel.CENTER);
                 return c;
             }
         });
 
-        // Custom Cell Renderer for Image Column (Index 5) - Center Align and display Icon (Index updated)
-        inventoryTable.getColumnModel().getColumn(5).setCellRenderer(new DefaultTableCellRenderer() {
+
+        inventoryTable.getColumnModel().getColumn(8).setCellRenderer(new DefaultTableCellRenderer() {
             @Override
             public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected, boolean hasFocus, int row, int column) {
                 JLabel label = (JLabel) super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
-                label.setText(""); // Clear any text
+                label.setText("");
                 if (value instanceof ImageIcon) {
-                    label.setIcon((ImageIcon) value); // Set the icon
+                    ImageIcon originalIcon = (ImageIcon) value;
+                     // Scale image for table display
+                     Image scaledImage = originalIcon.getImage().getScaledInstance(-1, 50, Image.SCALE_SMOOTH); // Use SCALE_SMOOTH for better table image quality
+                    label.setIcon(new ImageIcon(scaledImage));
                 } else {
-                    label.setIcon(null); // No icon if value is not ImageIcon
-                    label.setText("No Image"); // Or some placeholder text
+                    label.setIcon(null);
                 }
                 label.setHorizontalAlignment(JLabel.CENTER);
                 label.setVerticalAlignment(JLabel.CENTER);
@@ -300,19 +322,20 @@ public class Inventory extends javax.swing.JPanel {
             }
         });
 
-
-        // Set preferred column widths (indices updated)
-        inventoryTable.getColumnModel().getColumn(0).setPreferredWidth(60);
-        inventoryTable.getColumnModel().getColumn(1).setPreferredWidth(160);
+        inventoryTable.getColumnModel().getColumn(0).setPreferredWidth(40);
+        inventoryTable.getColumnModel().getColumn(1).setPreferredWidth(150);
         inventoryTable.getColumnModel().getColumn(2).setPreferredWidth(100);
-        inventoryTable.getColumnModel().getColumn(3).setPreferredWidth(100);
-        // Removed width settings for the hidden Unit column
-        inventoryTable.getColumnModel().getColumn(4).setPreferredWidth(80); // Status is now at index 4
-        inventoryTable.getColumnModel().getColumn(5).setPreferredWidth(70); // Image is now at index 5
+        inventoryTable.getColumnModel().getColumn(3).setPreferredWidth(50);
+        inventoryTable.getColumnModel().getColumn(4).setPreferredWidth(60);
+        inventoryTable.getColumnModel().getColumn(5).setPreferredWidth(80);
+        inventoryTable.getColumnModel().getColumn(6).setPreferredWidth(90);
+        inventoryTable.getColumnModel().getColumn(7).setPreferredWidth(100);
+        inventoryTable.getColumnModel().getColumn(8).setPreferredWidth(70);
+
 
         JScrollPane scrollPane = new JScrollPane(inventoryTable);
         scrollPane.getViewport().setBackground(new Color(30, 30, 30));
-        panel.add(scrollPane, BorderLayout.CENTER);
+        panel.add(scrollPane, BorderLayout.CENTER); // Scroll pane takes center of table panel
 
         JPanel paginationPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
         paginationPanel.setOpaque(false);
@@ -320,10 +343,12 @@ public class Inventory extends javax.swing.JPanel {
         stylePaginationButton(jButtonPreviousPage);
         jButtonPreviousPage.addActionListener(e -> gotoPreviousPage());
         paginationPanel.add(jButtonPreviousPage);
+
         jLabelPageInfo = new JLabel("Page 1 of 1");
         jLabelPageInfo.setFont(new Font("Verdana", Font.PLAIN, 12));
         jLabelPageInfo.setForeground(Color.WHITE);
         paginationPanel.add(jLabelPageInfo);
+
         jButtonNextPage = new JButton("Next");
         stylePaginationButton(jButtonNextPage);
         jButtonNextPage.addActionListener(e -> gotoNextPage());
@@ -333,132 +358,19 @@ public class Inventory extends javax.swing.JPanel {
         return panel;
     }
 
-
-    private JPanel createItemDetailsPanel() {
-        JPanel panel = new JPanel(new BorderLayout(0, 10));
-        panel.setOpaque(false);
-        panel.setBorder(BorderFactory.createTitledBorder(BorderFactory.createLineBorder(Color.GRAY),
-                "Item Details", javax.swing.border.TitledBorder.DEFAULT_JUSTIFICATION,
-                javax.swing.border.TitledBorder.DEFAULT_POSITION,
-                new Font("Verdana", Font.BOLD, 14), Color.WHITE));
-        panel.setPreferredSize(new Dimension(350, 0));
-
-        JPanel formPanel = new JPanel(new GridBagLayout());
-        formPanel.setOpaque(false);
-        GridBagConstraints gbc = new GridBagConstraints();
-        gbc.insets = new Insets(5, 5, 5, 5);
-        gbc.anchor = GridBagConstraints.WEST;
-
-        String[] units = {"pcs", "boxes", "packs", "reams", "liters", "kg", "meters", "rolls"};
-        unitField = new JComboBox<>(units);
-        unitField.setEditable(true);
-
-        addField(formPanel, gbc, 0, "Item ID:", itemIdField = createNonEditableTextField(), 0.0);
-        addField(formPanel, gbc, 1, "Name:", nameField = createEditableTextField(), 0.0);
-        addField(formPanel, gbc, 2, "Category:", categoryField = new JComboBox<>(), 0.0);
-        addField(formPanel, gbc, 3, "Quantity:", quantityField = createEditableTextField(), 0.0);
-        addField(formPanel, gbc, 4, "Unit:", unitField, 0.0);
-        addField(formPanel, gbc, 5, "Reorder Lvl:", reorderLevelField = createEditableTextField(), 0.0);
-
-        gbc.gridx = 0;
-        gbc.gridy = 6;
-        gbc.gridwidth = 2;
-        gbc.fill = GridBagConstraints.HORIZONTAL;
-        gbc.weightx = 1.0;
-        gbc.weighty = 0.0;
-        JPanel imagePanel = new JPanel(new BorderLayout(0, 5));
-        imagePanel.setOpaque(false);
-        imagePanel.setBorder(BorderFactory.createTitledBorder(BorderFactory.createLineBorder(Color.GRAY),
-                "Item Image", javax.swing.border.TitledBorder.DEFAULT_JUSTIFICATION,
-                javax.swing.border.TitledBorder.DEFAULT_POSITION, new Font("Verdana", Font.BOLD, 12), Color.WHITE));
-        imageLabel = new JLabel("No Image Selected", SwingConstants.CENTER);
-        imageLabel.setForeground(Color.LIGHT_GRAY);
-        imageLabel.setPreferredSize(new Dimension(200, 150));
-        imageLabel.setMinimumSize(new Dimension(150, 100));
-        imageLabel.setBorder(BorderFactory.createLineBorder(Color.DARK_GRAY));
-        imagePanel.add(imageLabel, BorderLayout.CENTER);
-        JButton browseButton = new JButton("Browse...");
-        browseButton.setFont(new Font("Verdana", Font.PLAIN, 12));
-        browseButton.addActionListener((ActionEvent e) -> browseImage());
-        imagePanel.add(browseButton, BorderLayout.SOUTH);
-        formPanel.add(imagePanel, gbc);
-
-        gbc.gridx = 0;
-        gbc.gridy = 7;
-        gbc.weighty = 1.0;
-        gbc.fill = GridBagConstraints.VERTICAL;
-        formPanel.add(new JLabel(), gbc);
-
-        panel.add(formPanel, BorderLayout.CENTER);
-        return panel;
-    }
-
-
-    private JTextField createEditableTextField() {
-        JTextField textField = new JTextField(15);
-        textField.setFont(new Font("Verdana", Font.PLAIN, 12));
-        return textField;
-    }
-
-
-    private JTextField createNonEditableTextField() {
-        JTextField textField = new JTextField(15);
-        textField.setFont(new Font("Verdana", Font.PLAIN, 12));
-        textField.setEditable(false);
-        textField.setBackground(Color.DARK_GRAY);
-        textField.setForeground(Color.LIGHT_GRAY);
-        return textField;
-    }
-
-
-    private void addField(JPanel panel, GridBagConstraints gbc, int y, String labelText, Component component, double weighty) {
-        gbc.gridx = 0;
-        gbc.gridy = y;
-        gbc.gridwidth = 1;
-        gbc.fill = GridBagConstraints.NONE;
-        gbc.weightx = 0.0;
-        gbc.weighty = weighty;
-        JLabel label = new JLabel(labelText);
-        label.setForeground(Color.WHITE);
-        label.setFont(new Font("Verdana", Font.PLAIN, 12));
-        panel.add(label, gbc);
-        gbc.gridx = 1;
-        gbc.fill = GridBagConstraints.HORIZONTAL;
-        gbc.weightx = 1.0;
-        if (component instanceof JComboBox) {
-            ((JComboBox<?>) component).setFont(new Font("Verdana", Font.PLAIN, 12));
-        } else if (component instanceof JTextField) {
-            ((JTextField) component).setFont(new Font("Verdana", Font.PLAIN, 12));
-        }
-        panel.add(component, gbc);
-    }
-
-
     private JPanel createActionPanel() {
         JPanel panel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 5));
         panel.setOpaque(false);
+
         JButton addButton = new JButton("Add New");
         styleActionButton(addButton, new Color(46, 204, 113));
-        addButton.addActionListener((ActionEvent e) -> prepareNewItem());
+        addButton.addActionListener((ActionEvent e) -> openItemDetailsDialog(-1)); // -1 for new item
         panel.add(addButton);
-        saveButton = new JButton("Save");
-        styleActionButton(saveButton, new Color(41, 128, 185));
-        saveButton.addActionListener((ActionEvent e) -> saveItem());
-        saveButton.setEnabled(false);
-        panel.add(saveButton);
-        deleteButton = new JButton("Delete");
-        styleActionButton(deleteButton, new Color(231, 76, 60));
-        deleteButton.addActionListener((ActionEvent e) -> deleteItem());
-        deleteButton.setEnabled(false);
-        panel.add(deleteButton);
-        cancelButton = new JButton("Cancel");
-        styleActionButton(cancelButton, new Color(149, 165, 166));
-        cancelButton.addActionListener((ActionEvent e) -> hideDetailsPanel());
-        cancelButton.setEnabled(false);
-        panel.add(cancelButton);
+
+        // Removed Save, Delete, Cancel buttons from the main panel
+
         return panel;
     }
-
 
     private void styleActionButton(JButton button, Color bgColor) {
         button.setFont(new Font("Verdana", Font.BOLD, 14));
@@ -466,7 +378,18 @@ public class Inventory extends javax.swing.JPanel {
         button.setForeground(Color.WHITE);
         button.setFocusPainted(false);
         button.setBorder(BorderFactory.createCompoundBorder(
-                BorderFactory.createLineBorder(bgColor.darker(), 1), BorderFactory.createEmptyBorder(5, 15, 5, 15)));
+                BorderFactory.createLineBorder(bgColor.darker(), 1),
+                BorderFactory.createEmptyBorder(5, 15, 5, 15)
+        ));
+    }
+
+    private void styleAddCategoryButton(JButton button) {
+        button.setFont(new Font("Verdana", Font.BOLD, 14));
+        button.setBackground(new Color(155, 89, 182));
+        button.setForeground(Color.WHITE);
+         button.setFocusPainted(false);
+        button.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(new Color(128, 57, 153), 1), BorderFactory.createEmptyBorder(5, 15, 5, 15)));
     }
 
 
@@ -474,36 +397,27 @@ public class Inventory extends javax.swing.JPanel {
         button.setFont(new Font("Verdana", Font.PLAIN, 12));
         button.setBackground(new Color(70, 70, 70));
         button.setForeground(Color.WHITE);
-        button.setFocusPainted(false);
+         button.setFocusPainted(false);
         button.setBorder(BorderFactory.createCompoundBorder(
                 BorderFactory.createLineBorder(Color.GRAY, 1), BorderFactory.createEmptyBorder(3, 8, 3, 8)));
     }
 
 
-    private void styleAddCategoryButton(JButton button) {
-        button.setFont(new Font("Verdana", Font.BOLD, 14));
-        button.setBackground(new Color(155, 89, 182));
-        button.setForeground(Color.WHITE);
-        button.setFocusPainted(false);
-        button.setBorder(BorderFactory.createCompoundBorder(
-                BorderFactory.createLineBorder(new Color(128, 57, 153), 1), BorderFactory.createEmptyBorder(5, 15, 5, 15)));
-    }
-
-
     private void loadCategories() {
         categoryFilter.removeAllItems();
-        categoryField.removeAllItems();
         categoryFilter.addItem("All Categories");
-        String sql = "SELECT CategoryName FROM Categories ORDER BY CategoryName";
+
         if (conn == null) {
-            System.err.println("Cannot load categories: DB connection null.");
+            System.err.println("Cannot load categories: DB connection is null.");
             return;
         }
-        try (PreparedStatement pstmt = conn.prepareStatement(sql); ResultSet rs = pstmt.executeQuery()) {
+
+        String sql = "SELECT CategoryName FROM Categories ORDER BY CategoryName";
+        try (PreparedStatement pstmt = conn.prepareStatement(sql);
+             ResultSet rs = pstmt.executeQuery()) {
             while (rs.next()) {
                 String categoryName = rs.getString("CategoryName");
                 categoryFilter.addItem(categoryName);
-                categoryField.addItem(categoryName);
             }
         } catch (SQLException e) {
             System.err.println("Error loading categories: " + e.getMessage());
@@ -511,264 +425,233 @@ public class Inventory extends javax.swing.JPanel {
         }
     }
 
-
-    private boolean validateInput() {
-        String name = nameField.getText().trim();
-        String quantityStr = quantityField.getText().trim();
-        String reorderLevelStr = reorderLevelField.getText().trim();
-        Object unitObj = unitField.getSelectedItem();
-
-        if (name.isEmpty()) {
-            JOptionPane.showMessageDialog(this, "Item Name cannot be empty.", "Input Error", JOptionPane.WARNING_MESSAGE);
-            nameField.requestFocus();
-            return false;
-        }
-        if (categoryField.getSelectedIndex() < 0) {
-            JOptionPane.showMessageDialog(this, "Please select a category.", "Input Error", JOptionPane.WARNING_MESSAGE);
-            categoryField.requestFocus();
-            return false;
-        }
-        if (quantityStr.isEmpty()) {
-            JOptionPane.showMessageDialog(this, "Quantity cannot be empty.", "Input Error", JOptionPane.WARNING_MESSAGE);
-            quantityField.requestFocus();
-            return false;
-        }
-        if (unitObj == null || unitObj.toString().trim().isEmpty()) {
-            JOptionPane.showMessageDialog(this, "Unit cannot be empty.", "Input Error", JOptionPane.WARNING_MESSAGE);
-            unitField.requestFocus();
-            return false;
-        }
-        if (reorderLevelStr.isEmpty()) {
-            JOptionPane.showMessageDialog(this, "Reorder Level cannot be empty.", "Input Error", JOptionPane.WARNING_MESSAGE);
-            reorderLevelField.requestFocus();
-            return false;
-        }
-
-        try {
-            int quantity = Integer.parseInt(quantityStr);
-            if (quantity < 0) {
-                JOptionPane.showMessageDialog(this, "Quantity cannot be negative.", "Input Error", JOptionPane.WARNING_MESSAGE);
-                quantityField.requestFocus();
-                return false;
-            }
-        } catch (NumberFormatException e) {
-            JOptionPane.showMessageDialog(this, "Invalid Quantity format.", "Input Error", JOptionPane.WARNING_MESSAGE);
-            quantityField.requestFocus();
-            return false;
-        }
-
-        try {
-            int reorderLevel = Integer.parseInt(reorderLevelStr);
-            if (reorderLevel < 0) {
-                JOptionPane.showMessageDialog(this, "Reorder Level cannot be negative.", "Input Error", JOptionPane.WARNING_MESSAGE);
-                reorderLevelField.requestFocus();
-            }
-        } catch (NumberFormatException e) {
-            JOptionPane.showMessageDialog(this, "Invalid Reorder Level format.", "Input Error", JOptionPane.WARNING_MESSAGE);
-            reorderLevelField.requestFocus();
-            return false;
-        }
-
-        return true;
-    }
-
-
-    private void logActivity(String activityType, String details) {
-        String sql = "INSERT INTO RecentActivities (ActivityType, UserID, Details, ActivityDate) VALUES (?, ?, ?, NOW())";
-        if (conn == null || currentUserId <= 0) {
-            System.err.println("Cannot log activity: DB null or invalid UserID.");
-            return;
-        }
-        try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
-            pstmt.setString(1, activityType);
-            pstmt.setInt(2, currentUserId);
-            pstmt.setString(3, details);
-            pstmt.executeUpdate();
-        } catch (SQLException e) {
-            System.err.println("Error logging activity: " + e.getMessage());
-        }
-    }
-
-
     private void fetchTotalItemCount() {
+        if (conn == null) return;
         String searchText = searchField.getText().trim().toLowerCase();
         String selectedCategory = (String) categoryFilter.getSelectedItem();
-        StringBuilder sql = new StringBuilder("SELECT COUNT(*) AS total FROM Items i");
-        boolean hasWhere = false;
-        boolean categorySelected = selectedCategory != null && !selectedCategory.equals("All Categories");
-        if (categorySelected) {
-            sql.append(" JOIN Categories c ON i.CategoryID = c.CategoryID");
-        }
-        if (!searchText.isEmpty()) {
-            sql.append(" WHERE LOWER(i.ItemName) LIKE ?");
-            hasWhere = true;
-        }
-        if (categorySelected) {
-            sql.append(hasWhere ? " AND" : " WHERE");
-            sql.append(" c.CategoryName = ?");
-        }
-        final String finalSql = sql.toString();
 
-        new Thread(() -> {
-            int count = 0;
-            try (Connection tempConn = DBConnection.getConnection(); PreparedStatement pstmt = tempConn.prepareStatement(finalSql)) {
-                int paramIndex = 1;
-                if (!searchText.isEmpty()) {
-                    pstmt.setString(paramIndex++, "%" + searchText + "%");
-                }
-                if (categorySelected) {
-                    pstmt.setString(paramIndex++, selectedCategory);
-                }
-                try (ResultSet rs = pstmt.executeQuery()) {
-                    if (rs.next()) {
-                        count = rs.getInt("total");
+        StringBuilder sqlBuilder = new StringBuilder("SELECT COUNT(*) AS total FROM Items i");
+        if (selectedCategory != null && !selectedCategory.equals("All Categories")) {
+            sqlBuilder.append(" JOIN Categories c ON i.CategoryID = c.CategoryID");
+        }
+
+        // Only count non-archived items
+        sqlBuilder.append(" WHERE i.IsArchived = FALSE");
+
+        if (!searchText.isEmpty()) {
+            sqlBuilder.append(" AND (LOWER(i.ItemName) LIKE ? OR LOWER(i.Description) LIKE ? OR LOWER(i.SerialNumber) LIKE ?)");
+        }
+        if (selectedCategory != null && !selectedCategory.equals("All Categories")) {
+            sqlBuilder.append(" AND c.CategoryName = ?");
+        }
+
+        final String sql = sqlBuilder.toString();
+
+        new SwingWorker<Integer, Void>() {
+            @Override
+            protected Integer doInBackground() throws Exception {
+                int count = 0;
+                try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
+                    int paramIndex = 1;
+                    if (!searchText.isEmpty()) {
+                        String searchTerm = "%" + searchText + "%";
+                        pstmt.setString(paramIndex++, searchTerm);
+                        pstmt.setString(paramIndex++, searchTerm);
+                        pstmt.setString(paramIndex++, searchTerm);
                     }
+                    if (selectedCategory != null && !selectedCategory.equals("All Categories")) {
+                        pstmt.setString(paramIndex++, selectedCategory);
+                    }
+                    try (ResultSet rs = pstmt.executeQuery()) {
+                        if (rs.next()) {
+                            count = rs.getInt("total");
+                        }
+                    }
+                } catch (SQLException e) {
+                    System.err.println("Error fetching total item count: " + e.getMessage());
                 }
-            } catch (SQLException e) {
-                System.err.println("Error fetching total item count: " + e.getMessage());
+                return count;
             }
-            final int finalCount = count;
-            SwingUtilities.invokeLater(() -> {
-                totalItems = finalCount;
-                int totalPages = (int) Math.ceil((double) totalItems / itemsPerPage);
-                totalPages = Math.max(totalPages, 1);
-                if (currentPage > totalPages) {
-                    currentPage = totalPages;
+
+            @Override
+            protected void done() {
+                try {
+                    totalItems = get();
+                    int totalPages = (int) Math.ceil((double) totalItems / itemsPerPage);
+                    totalPages = Math.max(totalPages, 1);
+                    if (currentPage > totalPages) {
+                        currentPage = totalPages;
+                    }
+                    updatePaginationControls();
+                    // After fetching total count and updating pagination, refresh the table data
+                    refreshTableData();
+                } catch (Exception e) {
+                    e.printStackTrace();
+                    JOptionPane.showMessageDialog(Inventory.this, "Error updating item count: " + e.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
                 }
-                updatePaginationControls();
-                loadInventoryData();
-            });
-        }).start();
+            }
+        }.execute();
     }
 
-
-    private void loadInventoryData() {
-        if (conn == null) {
+    // New method to initiate table data loading
+    private void refreshTableData() {
+         if (conn == null) {
+            System.err.println("Cannot refresh table data: DB connection is null.");
+            SwingUtilities.invokeLater(() -> tableModel.setRowCount(0));
             return;
         }
+
+        // Cancel any previous data loading task
+        if (currentDataLoader != null && !currentDataLoader.isDone()) {
+             System.out.println("Cancelling previous Inventory data loader task."); // Debug print
+            currentDataLoader.cancel(true);
+        }
+
         String searchText = searchField.getText().trim().toLowerCase();
-        String selectedCategory = (String) categoryFilter.getSelectedItem();
+        String selectedCategoryFilter = (String) categoryFilter.getSelectedItem();
         int offset = (currentPage - 1) * itemsPerPage;
-        StringBuilder sql = new StringBuilder("SELECT i.ItemID, i.ItemName, c.CategoryName, i.Quantity, i.Unit, i.Status, i.ItemImage FROM Items i JOIN Categories c ON i.CategoryID = c.CategoryID");
-        StringBuilder whereClause = new StringBuilder();
-        boolean hasWhere = false;
+
+        StringBuilder sqlBuilder = new StringBuilder(
+            "SELECT i.ItemID, i.ItemName, c.CategoryName, i.Quantity, i.Unit, i.Status, " +
+            "i.ItemCondition, i.MachineStatus, i.ItemImage " +
+            "FROM Items i " +
+            "LEFT JOIN Categories c ON i.CategoryID = c.CategoryID"
+        );
+
+        // Only fetch non-archived items
+        sqlBuilder.append(" WHERE i.IsArchived = FALSE");
+
         if (!searchText.isEmpty()) {
-            whereClause.append(" WHERE LOWER(i.ItemName) LIKE ?");
-            hasWhere = true;
+            sqlBuilder.append(" AND (LOWER(i.ItemName) LIKE ? OR LOWER(i.Description) LIKE ? OR LOWER(i.SerialNumber) LIKE ?)");
         }
-        boolean categorySelected = selectedCategory != null && !selectedCategory.equals("All Categories");
-        if (categorySelected) {
-            whereClause.append(hasWhere ? " AND" : " WHERE");
-            whereClause.append(" c.CategoryName = ?");
+        if (selectedCategoryFilter != null && !selectedCategoryFilter.equals("All Categories")) {
+            sqlBuilder.append(" AND c.CategoryName = ?");
         }
-        sql.append(whereClause);
-        // Changed ordering to show newest items first
-        sql.append(" ORDER BY i.CreatedAt DESC LIMIT ? OFFSET ?");
-        final String finalSql = sql.toString();
-        new InventoryLoader(finalSql, searchText, selectedCategory, categorySelected, offset, itemsPerPage).execute();
+        sqlBuilder.append(" ORDER BY i.ItemID DESC LIMIT ? OFFSET ?");
+
+        final String finalSql = sqlBuilder.toString();
+        currentDataLoader = new InventoryLoader(finalSql, searchText, selectedCategoryFilter, offset, itemsPerPage);
+        currentDataLoader.execute();
     }
 
 
     private class InventoryLoader extends SwingWorker<Void, Object[]> {
-
         private final String sql;
         private final String searchText;
-        private final String selectedCategory;
-        private final boolean categorySelected;
+        private final String categoryNameFilter;
         private final int offset;
         private final int limit;
 
-        public InventoryLoader(String s, String st, String sc, boolean cs, int o, int l) {
-            sql = s;
-            searchText = st;
-            selectedCategory = sc;
-            categorySelected = cs;
-            offset = o;
-            limit = l;
-            SwingUtilities.invokeLater(() -> tableModel.setRowCount(0));
+        public InventoryLoader(String sql, String searchText, String categoryNameFilter, int offset, int limit) {
+            this.sql = sql;
+            this.searchText = searchText;
+            this.categoryNameFilter = categoryNameFilter;
+            this.offset = offset;
+            this.limit = limit;
+             System.out.println("InventoryLoader created for page " + (offset / limit + 1)); // Debug print
+            // Clear the table model on the Event Dispatch Thread (EDT)
+            // before loading new data to prevent duplication when changing pages or searching.
+            SwingUtilities.invokeLater(() -> {
+                 System.out.println("Clearing Inventory table model on EDT before loading page " + (offset / limit + 1)); // Debug print
+                 tableModel.setRowCount(0); // Clear table on EDT
+            });
         }
 
         @Override
         protected Void doInBackground() throws Exception {
-            try (Connection tConn = DBConnection.getConnection(); PreparedStatement ps = tConn.prepareStatement(sql)) {
-                int pIdx = 1;
+             System.out.println("InventoryLoader doInBackground started for page " + (offset / limit + 1)); // Debug print
+            try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
+                int paramIndex = 1;
                 if (!searchText.isEmpty()) {
-                    ps.setString(pIdx++, "%" + searchText + "%");
+                    String searchTerm = "%" + searchText + "%";
+                    pstmt.setString(paramIndex++, searchTerm);
+                    pstmt.setString(paramIndex++, searchTerm);
+                    pstmt.setString(paramIndex++, searchTerm);
                 }
-                if (categorySelected) {
-                    ps.setString(pIdx++, selectedCategory);
+                if (categoryNameFilter != null && !categoryNameFilter.equals("All Categories")) {
+                    pstmt.setString(paramIndex++, categoryNameFilter);
                 }
-                ps.setInt(pIdx++, limit);
-                ps.setInt(pIdx++, offset);
-                try (ResultSet rs = ps.executeQuery()) {
+                pstmt.setInt(paramIndex++, limit);
+                pstmt.setInt(paramIndex++, offset);
+
+                try (ResultSet rs = pstmt.executeQuery()) {
                     while (rs.next()) {
+                         // Check if the task has been cancelled
+                        if (isCancelled()) {
+                            System.out.println("InventoryLoader task cancelled.");
+                            break;
+                        }
                         ImageIcon thumb = null;
                         byte[] imgData = rs.getBytes("ItemImage");
                         if (imgData != null && imgData.length > 0) {
                             try {
                                 ImageIcon orig = new ImageIcon(imgData);
-                                // Scale the image to fit the row height
-                                Image scaled = orig.getImage().getScaledInstance(-1, 50, Image.SCALE_SMOOTH); // Scale height to 50, maintain aspect ratio
+                                // Use SCALE_SMOOTH for better table image quality
+                                Image scaled = orig.getImage().getScaledInstance(-1, 50, Image.SCALE_SMOOTH);
                                 thumb = new ImageIcon(scaled);
                             } catch (Exception ix) {
-                                System.err.println("Error scaling image: " + ix.getMessage());
-                                // On error, set a null icon and potentially text
-                                thumb = null;
+                                System.err.println("Error scaling image for table: " + ix.getMessage());
                             }
                         }
-                        String quantityUnit = rs.getInt("Quantity") + " " + rs.getString("Unit");
-
-                        // Publish data in the correct order for the table model
                         publish(new Object[]{
-                            rs.getInt("ItemID"),         // Column 0: Item ID
-                            rs.getString("ItemName"),     // Column 1: Name
-                            rs.getString("CategoryName"), // Column 2: Category
-                            quantityUnit,                 // Column 3: Quantity (combined)
-                            rs.getString("Unit"),         // Column 4: Unit (hidden) - Still publish for loadItemDetails
-                            rs.getString("Status"),       // Column 5: Status
-                            thumb                         // Column 6: Image
+                            rs.getInt("ItemID"),
+                            rs.getString("ItemName"),
+                            rs.getString("CategoryName"),
+                            rs.getInt("Quantity"),
+                            rs.getString("Unit"),
+                            rs.getString("Status"),
+                            rs.getString("ItemCondition"),
+                            rs.getString("MachineStatus"),
+                            thumb
                         });
                     }
                 }
             } catch (SQLException e) {
                 System.err.println("Error in InventoryLoader: " + e.getMessage());
+                 SwingUtilities.invokeLater(() ->
+                    JOptionPane.showMessageDialog(Inventory.this, "Error loading inventory data: " + e.getMessage() + "\nEnsure your database schema is up to date, especially the 'Items' table (e.g., ItemCondition column).", "Database Error", JOptionPane.ERROR_MESSAGE)
+                );
             }
             return null;
         }
 
         @Override
         protected void process(java.util.List<Object[]> chunks) {
-            for (Object[] row : chunks) {
-                // Add data to table model columns in the correct order after removing Unit column
-                // Columns in tableModel: Item ID, Name, Category, Quantity, Status, Image
-                // Data in row[] from publish: Item ID, Name, Category, Quantity (combined), Unit, Status, Image
-                tableModel.addRow(new Object[]{
-                    row[0], // Item ID
-                    row[1], // Name
-                    row[2], // Category
-                    row[3], // Quantity (combined)
-                    row[5], // Status (original index 5 in publish, now index 4 in tableModel)
-                    row[6]  // Image (original index 6 in publish, now index 5 in tableModel)
-                });
+             System.out.println("InventoryLoader process called with chunk size: " + chunks.size()); // Debug print
+             // Only add rows if the task is not cancelled
+            if (!isCancelled()) {
+                for (Object[] rowData : chunks) {
+                    tableModel.addRow(rowData);
+                }
+            } else {
+                 System.out.println("InventoryLoader process skipping adding rows due to cancellation.");
             }
         }
-
-        @Override
+         @Override
         protected void done() {
+             System.out.println("InventoryLoader done called. Is cancelled: " + isCancelled()); // Debug print
             try {
-                get();
+                 // Check if the task was cancelled before processing results
+                if (!isCancelled()) {
+                    get(); // Check for exceptions from doInBackground
+                }
             } catch (Exception e) {
                 e.printStackTrace();
+                 // Only show error dialog if the task was not cancelled
+                if (!isCancelled()) {
+                    JOptionPane.showMessageDialog(Inventory.this, "Failed to complete inventory loading: " + e.getMessage(), "Loading Error", JOptionPane.ERROR_MESSAGE);
+                }
+            } finally {
+                 // Ensure currentDataLoader is set to null on completion or cancellation
+                 currentDataLoader = null;
             }
         }
     }
-
 
     private void searchInventory() {
         currentPage = 1;
-        fetchTotalItemCount();
+        fetchTotalItemCount(); // Fetch total count for new search, which triggers refreshTableData
     }
-
 
     private void updatePaginationControls() {
         int totalPages = (int) Math.ceil((double) totalItems / itemsPerPage);
@@ -781,436 +664,90 @@ public class Inventory extends javax.swing.JPanel {
         }
     }
 
-
     private void gotoPreviousPage() {
         if (currentPage > 1) {
             currentPage--;
-            loadInventoryData();
-            updatePaginationControls();
+            refreshTableData(); // Refresh data for the new page
+            updatePaginationControls(); // Update controls based on new page
         }
     }
-
 
     private void gotoNextPage() {
         int totalPages = (int) Math.ceil((double) totalItems / itemsPerPage);
-        totalPages = Math.max(totalPages, 1);
+         totalPages = Math.max(totalPages, 1);
         if (currentPage < totalPages) {
             currentPage++;
-            loadInventoryData();
-            updatePaginationControls();
+            refreshTableData(); // Refresh data for the new page
+            updatePaginationControls(); // Update controls based on new page
         }
     }
 
-
-    private void loadItemDetails(int itemId) {
-        String sql = "SELECT i.ItemName, i.CategoryID, c.CategoryName, i.Quantity, i.ReorderLevel, i.Unit, i.ItemImage, i.ItemImageType FROM Items i JOIN Categories c ON i.CategoryID = c.CategoryID WHERE i.ItemID = ?";
-        if (conn == null) {
-            return;
-        }
-        try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
-            pstmt.setInt(1, itemId);
-            try (ResultSet rs = pstmt.executeQuery()) {
-                if (rs.next()) {
-                    String itemName = rs.getString("ItemName");
-                    String categoryName = rs.getString("CategoryName");
-                    int quantity = rs.getInt("Quantity");
-                    int reorderLevel = rs.getInt("ReorderLevel");
-                    String unit = rs.getString("Unit");
-                    byte[] imageData = rs.getBytes("ItemImage");
-                    selectedImageType = rs.getString("ItemImageType");
-                    SwingUtilities.invokeLater(() -> {
-                        itemIdField.setText(String.valueOf(itemId));
-                        nameField.setText(itemName);
-                        categoryField.setSelectedItem(categoryName);
-                        quantityField.setText(String.valueOf(quantity));
-                        reorderLevelField.setText(String.valueOf(reorderLevel));
-                        unitField.setSelectedItem(unit);
-                        selectedImageFile = null;
-                        if (imageData != null && imageData.length > 0) {
-                            try {
-                                ImageIcon iIcon = new ImageIcon(imageData);
-                                int tW = imageLabel.getPreferredSize().width - 10;
-                                int tH = imageLabel.getPreferredSize().height - 10;
-                                Image scImg = iIcon.getImage().getScaledInstance(tW, tH, Image.SCALE_SMOOTH);
-                                imageLabel.setIcon(new ImageIcon(scImg));
-                                imageLabel.setText("");
-                            } catch (Exception imgEx) {
-                                imageLabel.setIcon(null);
-                                imageLabel.setText("Preview Error");
-                                imageLabel.setForeground(Color.RED);
-                                System.err.println("Error displaying image preview: " + imgEx.getMessage());
-                            }
-                        } else {
-                            imageLabel.setIcon(null);
-                            imageLabel.setText("No Image Available");
-                            imageLabel.setForeground(Color.LIGHT_GRAY);
-                        }
-                        isNewItem = false;
-                        detailPanel.setVisible(true);
-                        enableActionButtons(true);
-                    });
-                } else {
-                    hideDetailsPanel();
-                }
-            }
-        } catch (SQLException e) {
-            hideDetailsPanel();
-            System.err.println("Error loading item details: " + e.getMessage());
-        }
-    }
-
-
-    private void prepareNewItem() {
-        isNewItem = true;
-        clearDetailsPanel();
-        itemIdField.setText("AUTO");
-        detailPanel.setVisible(true);
-        enableActionButtons(true);
-        deleteButton.setEnabled(false);
-        nameField.requestFocus();
-    }
-
-
-    private void saveItem() {
-        if (!validateInput()) {
-            return;
-        }
-        String name = nameField.getText().trim();
-        String categoryName = (String) categoryField.getSelectedItem();
-        int quantity = Integer.parseInt(quantityField.getText().trim());
-        int reorderLevel = Integer.parseInt(reorderLevelField.getText().trim());
-        String unit = unitField.getSelectedItem().toString().trim();
-        int categoryId = getCategoryId(categoryName);
-        if (categoryId == -1) {
-            JOptionPane.showMessageDialog(this, "Invalid category selected.", "Error", JOptionPane.ERROR_MESSAGE);
-            return;
-        }
-        if (conn == null) {
-            JOptionPane.showMessageDialog(this, "Database connection is not available.", "Error", JOptionPane.ERROR_MESSAGE);
-            return;
-        }
-        FileInputStream fis = null;
-        String sql;
-        String successMessage;
-        String logActivityType;
-        String logDetails;
-        String newStatus = "In Stock";
-        if (quantity <= 0) {
-            newStatus = "Out of Stock";
-        } else if (quantity <= reorderLevel) {
-            newStatus = "Low Stock";
-        }
-
-        try {
-            if (isNewItem) {
-                sql = "INSERT INTO Items (ItemName, CategoryID, Quantity, ReorderLevel, Unit, ItemImage, ItemImageType, AddedBy, Status, CreatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())";
-                successMessage = "Item added successfully.";
-                logActivityType = "Item Added";
-                logDetails = "Item '" + name + "' added";
-                try (PreparedStatement pstmt = conn.prepareStatement(sql, PreparedStatement.RETURN_GENERATED_KEYS)) {
-                    pstmt.setString(1, name);
-                    pstmt.setInt(2, categoryId);
-                    pstmt.setInt(3, quantity);
-                    pstmt.setInt(4, reorderLevel);
-                    pstmt.setString(5, unit);
-                    if (selectedImageFile != null && selectedImageFile.exists()) {
-                        fis = new FileInputStream(selectedImageFile);
-                        pstmt.setBinaryStream(6, fis, (int) selectedImageFile.length());
-                        pstmt.setString(7, selectedImageType);
-                    } else {
-                        pstmt.setNull(6, java.sql.Types.BLOB);
-                        pstmt.setNull(7, java.sql.Types.VARCHAR);
-                    }
-                    pstmt.setInt(8, currentUserId);
-                    pstmt.setString(9, newStatus);
-                    int rowsAffected = pstmt.executeUpdate();
-                    if (rowsAffected > 0) {
-                        try (ResultSet gk = pstmt.getGeneratedKeys()) {
-                            if (gk.next()) {
-                                logDetails += " (ID: " + gk.getInt(1) + ")";
-                            }
-                        }
-                    } else {
-                        throw new SQLException("Creating item failed, no rows affected.");
-                    }
-                }
-            } else {
-                int itemId = Integer.parseInt(itemIdField.getText());
-                successMessage = "Item updated successfully.";
-                logActivityType = "Item Updated";
-                logDetails = "Item '" + name + "' (ID: " + itemId + ") updated";
-                if (selectedImageFile != null && selectedImageFile.exists()) {
-                    sql = "UPDATE Items SET ItemName=?, CategoryID=?, Quantity=?, ReorderLevel=?, Unit=?, ItemImage=?, ItemImageType=?, Status=?, UpdatedAt=NOW() WHERE ItemID=?";
-                    try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
-                        pstmt.setString(1, name);
-                        pstmt.setInt(2, categoryId);
-                        pstmt.setInt(3, quantity);
-                        pstmt.setInt(4, reorderLevel);
-                        pstmt.setString(5, unit);
-                        fis = new FileInputStream(selectedImageFile);
-                        pstmt.setBinaryStream(6, fis, (int) selectedImageFile.length());
-                        pstmt.setString(7, selectedImageType);
-                        pstmt.setString(8, newStatus);
-                        pstmt.setInt(9, itemId);
-                        pstmt.executeUpdate();
-                    }
-                } else {
-                    sql = "UPDATE Items SET ItemName=?, CategoryID=?, Quantity=?, ReorderLevel=?, Unit=?, Status=?, UpdatedAt=NOW() WHERE ItemID=?";
-                    try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
-                        pstmt.setString(1, name);
-                        pstmt.setInt(2, categoryId);
-                        pstmt.setInt(3, quantity);
-                        pstmt.setInt(4, reorderLevel);
-                        pstmt.setString(5, unit);
-                        pstmt.setString(6, newStatus);
-                        pstmt.setInt(7, itemId);
-                        pstmt.executeUpdate();
-                    }
-                }
-            }
-            JOptionPane.showMessageDialog(this, successMessage, "Success", JOptionPane.INFORMATION_MESSAGE);
-            logActivity(logActivityType, logDetails);
-            fetchTotalItemCount();
-            hideDetailsPanel();
-        } catch (SQLException | IOException e) {
-            e.printStackTrace();
-            JOptionPane.showMessageDialog(this, "Failed to save item: " + e.getMessage(), "DB Error", JOptionPane.ERROR_MESSAGE);
-        } finally {
-            if (fis != null) {
-                try {
-                    fis.close();
-                } catch (IOException ex) {
-                }
-            }
-        }
-    }
-
-
-    private int getCategoryId(String categoryName) {
-        String sql = "SELECT CategoryID FROM Categories WHERE CategoryName = ?";
-        if (conn == null || categoryName == null) {
-            return -1;
-        }
-        try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
-            pstmt.setString(1, categoryName);
-            try (ResultSet rs = pstmt.executeQuery()) {
-                if (rs.next()) {
-                    return rs.getInt("CategoryID");
-                }
-            }
-        } catch (SQLException e) {
-            System.err.println("Error getting CategoryID: " + e.getMessage());
-        }
-        return -1;
-    }
-
-
-    private void deleteItem() {
-        if (isNewItem || itemIdField.getText().isEmpty() || itemIdField.getText().equals("AUTO")) {
-            JOptionPane.showMessageDialog(this, "No item selected.", "Error", JOptionPane.WARNING_MESSAGE);
-            return;
-        }
-        int itemId;
-        try {
-            itemId = Integer.parseInt(itemIdField.getText());
-        } catch (NumberFormatException e) {
-            JOptionPane.showMessageDialog(this, "Invalid Item ID.", "Error", JOptionPane.WARNING_MESSAGE);
-            return;
-        }
-        String itemName = nameField.getText();
-        int result = JOptionPane.showConfirmDialog(this, "Delete item '" + itemName + "' (ID: " + itemId + ")?\nCannot be undone.", "Confirm Delete", JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
-        if (result == JOptionPane.YES_OPTION) {
-            if (hasDependencies(itemId)) {
-                JOptionPane.showMessageDialog(this, "Cannot delete item '" + itemName + "'. Referenced elsewhere.", "Deletion Blocked", JOptionPane.ERROR_MESSAGE);
-                return;
-            }
-            String sql = "DELETE FROM Items WHERE ItemID = ?";
-            if (conn == null) {
-                JOptionPane.showMessageDialog(this, "Database connection is not available.", "Error", JOptionPane.ERROR_MESSAGE);
-                return;
-            }
-            try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
-                pstmt.setInt(1, itemId);
-                int rowsAffected = pstmt.executeUpdate();
-                if (rowsAffected > 0) {
-                    JOptionPane.showMessageDialog(this, "Item deleted.", "Success", JOptionPane.INFORMATION_MESSAGE);
-                    logActivity("Item Deleted", "Item '" + itemName + "' (ID: " + itemId + ") deleted");
-                    fetchTotalItemCount();
-                    hideDetailsPanel();
-                } else {
-                    JOptionPane.showMessageDialog(this, "Item not found for deletion.", "Error", JOptionPane.WARNING_MESSAGE);
-                }
-            } catch (SQLException e) {
-                System.err.println("Error deleting item: " + e.getMessage());
-                JOptionPane.showMessageDialog(this, "DB error deleting item.", "Error", JOptionPane.ERROR_MESSAGE);
-            }
-        }
-    }
-
-
-    private boolean hasDependencies(int itemId) {
-        String[] checkSqls = {"SELECT 1 FROM Transactions WHERE ItemID=? LIMIT 1", "SELECT 1 FROM PurchaseOrderItems WHERE ItemID=? LIMIT 1"};
-        if (conn == null) {
-            return true;
-        }
-        for (String sql : checkSqls) {
-            try (PreparedStatement ps = conn.prepareStatement(sql)) {
-                ps.setInt(1, itemId);
-                try (ResultSet rs = ps.executeQuery()) {
-                    if (rs.next()) {
-                        return true;
-                    }
-                }
-            } catch (SQLException e) {
-                System.err.println("Dependency check error: " + e.getMessage());
-            }
-        }
-        return false;
-    }
-
-
-    private void browseImage() {
-        JFileChooser fc = new JFileChooser();
-        FileNameExtensionFilter filter = new FileNameExtensionFilter("Images", "jpg", "jpeg", "png", "gif");
-        fc.setFileFilter(filter);
-        fc.setAcceptAllFileFilterUsed(false);
-        int ret = fc.showOpenDialog(this);
-        if (ret == JFileChooser.APPROVE_OPTION) {
-            selectedImageFile = fc.getSelectedFile();
-            String fName = selectedImageFile.getName();
-            int dot = fName.lastIndexOf('.');
-            selectedImageType = (dot > 0 && dot < fName.length() - 1) ? fName.substring(dot + 1).toLowerCase() : null;
-            displaySelectedImage(selectedImageFile.getAbsolutePath());
-        }
-    }
-
-
-    private void displaySelectedImage(String imagePath) {
-        try {
-            ImageIcon iIcn = new ImageIcon(imagePath);
-            Image img = iIcn.getImage();
-            int tW = imageLabel.getPreferredSize().width - 10;
-            int tH = imageLabel.getPreferredSize().height - 10;
-            int oW = img.getWidth(null);
-            int oH = img.getHeight(null);
-            if (oW <= 0 || oH <= 0) {
-                throw new Exception("Bad dims");
-            }
-            int sW = tW;
-            int sH = (sW * oH) / oW;
-            if (sH > tH) {
-                sH = tH;
-                sW = (sH * oW) / oH;
-            }
-            sW = Math.max(1, sW);
-            sH = Math.max(1, sH);
-            Image scImg = img.getScaledInstance(sW, sH, Image.SCALE_SMOOTH);
-            imageLabel.setIcon(new ImageIcon(scImg));
-            imageLabel.setText(null);
-        } catch (Exception e) {
-            imageLabel.setIcon(null);
-            imageLabel.setText("Preview Error");
-            imageLabel.setForeground(Color.RED);
-            selectedImageFile = null;
-            selectedImageType = null;
-            System.err.println("Error displaying image: " + e.getMessage());
-        }
-    }
-
-
-    private void clearDetailsPanel() {
-        itemIdField.setText("");
-        nameField.setText("");
-        if (categoryField.getItemCount() > 0) {
-            categoryField.setSelectedIndex(0);
-        }
-        quantityField.setText("");
-        reorderLevelField.setText("");
-        if (unitField.getItemCount() > 0) {
-            unitField.setSelectedIndex(0);
+    // Method to open the ItemDetailsDialog
+    private void openItemDetailsDialog(int itemId) {
+        // Pass the current frame, modal status, connection, current user, and this listener
+        ItemDetailsDialog dialog = new ItemDetailsDialog((Frame) SwingUtilities.getWindowAncestor(this), true, conn, currentUser, this);
+        if (itemId == -1) {
+            dialog.prepareNewItem(); // Prepare for a new item
         } else {
-            unitField.setSelectedItem("");
-        }
-        imageLabel.setIcon(null);
-        imageLabel.setText("No Image Selected");
-        imageLabel.setForeground(Color.LIGHT_GRAY);
-        selectedImageFile = null;
-        selectedImageType = null;
-        isNewItem = true;
-
-    }
-
-
-    private void enableActionButtons(boolean enable) {
-        if (saveButton != null) {
-            saveButton.setEnabled(enable);
-        }
-        if (deleteButton != null) {
-            deleteButton.setEnabled(enable && !isNewItem);
-        }
-        if (cancelButton != null) {
-            cancelButton.setEnabled(enable);
+            dialog.loadItemDetails(itemId); // Load details for an existing item
         }
     }
 
-
-    private void hideDetailsPanel() {
-        detailPanel.setVisible(false);
-        clearDetailsPanel();
-        enableActionButtons(false);
-        inventoryTable.clearSelection();
+     @Override
+    public void itemSavedOrArchived() {
+        // This method is called when an item is saved, archived, or restored in the dialog
+        fetchTotalItemCount(); // Refresh the table data
     }
+
 
     private void showAddCategoryDialog() {
-        String ncn = JOptionPane.showInputDialog(this, "New category:", "Add Category", JOptionPane.PLAIN_MESSAGE);
-        if (ncn != null && !ncn.trim().isEmpty()) {
-            addNewCategory(ncn.trim());
-        } else if (ncn != null) {
-            JOptionPane.showMessageDialog(this, "Category name empty.", "Input Error", JOptionPane.WARNING_MESSAGE);
+        String newCategoryName = JOptionPane.showInputDialog(this, "Enter new category name:", "Add Category", JOptionPane.PLAIN_MESSAGE);
+        if (newCategoryName != null && !newCategoryName.trim().isEmpty()) {
+            addNewCategory(newCategoryName.trim());
+        } else if (newCategoryName != null) {
+            JOptionPane.showMessageDialog(this, "Category name cannot be empty.", "Input Error", JOptionPane.WARNING_MESSAGE);
         }
     }
 
-    private void addNewCategory(String catName) {
+    private void addNewCategory(String categoryName) {
         if (conn == null) {
             JOptionPane.showMessageDialog(this, "Database connection is not available.", "Error", JOptionPane.ERROR_MESSAGE);
             return;
         }
-        if (categoryExists(catName)) {
-            JOptionPane.showMessageDialog(this, "Category '" + catName + "' already exists.", "Duplicate", JOptionPane.WARNING_MESSAGE);
+        if (categoryExists(categoryName)) {
+            JOptionPane.showMessageDialog(this, "Category '" + categoryName + "' already exists.", "Duplicate Category", JOptionPane.WARNING_MESSAGE);
             return;
         }
+
         String sql = "INSERT INTO Categories (CategoryName) VALUES (?)";
-        try (PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setString(1, catName);
-            int ra = ps.executeUpdate();
-            if (ra > 0) {
-                JOptionPane.showMessageDialog(this, "Category added successfully.", "Success", JOptionPane.INFORMATION_MESSAGE);
-                logActivity("Category Added", "Category '" + catName + "' added");
+        try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            pstmt.setString(1, categoryName);
+            int affectedRows = pstmt.executeUpdate();
+            if (affectedRows > 0) {
+                JOptionPane.showMessageDialog(this, "Category '" + categoryName + "' added successfully.", "Success", JOptionPane.INFORMATION_MESSAGE);
+                // Reload categories in the filter dropdown
                 loadCategories();
             } else {
                 JOptionPane.showMessageDialog(this, "Failed to add category.", "Error", JOptionPane.ERROR_MESSAGE);
             }
-
         } catch (SQLException e) {
-            System.err.println("Error adding category: " + e.getMessage());
-            JOptionPane.showMessageDialog(this, "Database error adding category: " + e.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+            System.err.println("Error adding new category: " + e.getMessage());
+            JOptionPane.showMessageDialog(this, "Database error adding category: " + e.getMessage(), "DB Error", JOptionPane.ERROR_MESSAGE);
         }
     }
 
-    private boolean categoryExists(String catName) {
-        String sql = "SELECT 1 FROM Categories WHERE CategoryName=? LIMIT 1";
-        if (conn == null) {
-            return false;
-        }
-        try (PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setString(1, catName);
-            try (ResultSet rs = ps.executeQuery()) {
+    private boolean categoryExists(String categoryName) {
+        if (conn == null) return true;
+        String sql = "SELECT 1 FROM Categories WHERE CategoryName = ? LIMIT 1";
+        try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            pstmt.setString(1, categoryName);
+            try (ResultSet rs = pstmt.executeQuery()) {
                 return rs.next();
             }
         } catch (SQLException e) {
-            System.err.println("Error checking category existence: " + e.getMessage());
+            System.err.println("Error checking if category exists: " + e.getMessage());
+            return true;
         }
-        return false;
     }
 
     @SuppressWarnings("unchecked")

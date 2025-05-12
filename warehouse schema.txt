@@ -1,0 +1,463 @@
+CREATE DATABASE IF NOT EXISTS assetwise_academia;
+
+USE assetwise_academia;
+
+-- Drop tables in reverse order of dependency if they exist, to allow clean recreation
+DROP TABLE IF EXISTS SystemLogs;
+DROP TABLE IF EXISTS RecentActivities;
+DROP TABLE IF EXISTS Notifications;
+DROP TABLE IF EXISTS PurchaseOrderItems;
+DROP TABLE IF EXISTS PurchaseOrders;
+DROP TABLE IF EXISTS Transactions; -- Was ItemIssuanceLog, renamed for clarity and broader use
+DROP TABLE IF EXISTS Items;
+DROP TABLE IF EXISTS Categories;
+DROP TABLE IF EXISTS Users;
+
+
+CREATE TABLE Users (
+    UserID INT PRIMARY KEY AUTO_INCREMENT,
+    Username VARCHAR(50) UNIQUE NOT NULL,
+    Password VARCHAR(255) NOT NULL, -- Store hashed passwords
+    FullName VARCHAR(100) NOT NULL,
+    Email VARCHAR(100) UNIQUE NOT NULL,
+    Role ENUM('Admin', 'Custodian', 'KioskUser') NOT NULL, -- Added 'KioskUser'
+    IsActive BOOLEAN DEFAULT TRUE,
+    CreatedBy INT NULL, -- Allow NULL for initial admin or system-created users
+    CreatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (CreatedBy) REFERENCES Users(UserID) ON DELETE SET NULL -- Allow user deletion without losing CreatedBy history
+);
+
+CREATE TABLE Categories (
+    CategoryID INT PRIMARY KEY AUTO_INCREMENT,
+    CategoryName VARCHAR(100) UNIQUE NOT NULL, -- Increased length, ensure unique
+    Description TEXT -- Changed to TEXT for longer descriptions
+);
+
+CREATE TABLE Items (
+    ItemID INT PRIMARY KEY AUTO_INCREMENT,
+    ItemName VARCHAR(150) NOT NULL, -- Increased length
+    Description TEXT,
+    CategoryID INT,
+    Quantity INT NOT NULL DEFAULT 0,
+    ReorderLevel INT NOT NULL DEFAULT 5, -- Added a default
+    Unit VARCHAR(30) NOT NULL, -- Increased length
+    ItemImage LONGBLOB,
+    ItemImageType VARCHAR(50),
+
+    -- Fields for Machinery/Equipment
+    IsMachinery BOOLEAN DEFAULT FALSE,
+    MachineStatus ENUM('Active', 'Inactive', 'Under Maintenance', 'Not Applicable') DEFAULT 'Not Applicable',
+    ItemCondition ENUM('Good', 'Fair', 'Damaged', 'Needs Repair', 'Not Applicable') DEFAULT 'Not Applicable', -- Renamed from 'Condition' to 'ItemCondition'
+
+    Status VARCHAR(50) DEFAULT 'In Stock', -- Overall status like 'In Stock', 'Low Stock', 'Out of Stock'
+    Location VARCHAR(100) NULL, -- Optional: to store specific location within the warehouse
+    SerialNumber VARCHAR(100) NULL, -- Optional: for items with serial numbers
+    PurchaseDate DATE NULL, -- Optional
+    WarrantyExpiryDate DATE NULL, -- Optional
+
+    AddedBy INT,
+    CreatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UpdatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (CategoryID) REFERENCES Categories(CategoryID) ON DELETE SET NULL, -- Allow category deletion
+    FOREIGN KEY (AddedBy) REFERENCES Users(UserID) ON DELETE SET NULL -- Allow user deletion
+);
+
+-- Renamed from ItemIssuanceLog to Transactions for broader scope, and enhanced
+CREATE TABLE Transactions (
+    TransactionID INT PRIMARY KEY AUTO_INCREMENT,
+    ItemID INT NOT NULL,
+    TransactionType ENUM('Received', 'Issued', 'Returned', 'Adjusted', 'Damaged Out', 'Lost') NOT NULL, -- Added more types
+    Quantity INT NOT NULL,
+    TransactionDate TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UserID INT NOT NULL, -- User performing the transaction (Admin, Custodian) or KioskUser initiating
+
+    -- Fields for tracking school usage (especially for 'Issued' and 'Returned' types)
+    IssuedToPersonName VARCHAR(100) NULL, -- Name of the person (student/teacher) borrowing
+    IssuedToDepartment VARCHAR(100) NULL, -- e.g., 'Science Dept', 'Grade 10', 'Admin Office'
+    IssuedToGradeLevel VARCHAR(50) NULL, -- e.g., 'Grade 10', 'Faculty'
+    IssuedToSection VARCHAR(50) NULL, -- e.g., 'Section A'
+    SchoolYear VARCHAR(20) NULL, -- e.g., '2024-2025'
+    Purpose TEXT NULL,
+    ExpectedReturnDate DATE NULL,
+    ActualReturnDate DATE NULL,
+
+    Notes TEXT,
+    FOREIGN KEY (ItemID) REFERENCES Items(ItemID) ON DELETE CASCADE, -- If item is deleted, its transactions are removed
+    FOREIGN KEY (UserID) REFERENCES Users(UserID) ON DELETE RESTRICT -- Prevent user deletion if they have transactions
+);
+
+CREATE TABLE PurchaseOrders (
+    POID INT PRIMARY KEY AUTO_INCREMENT,
+    PONumber VARCHAR(30) UNIQUE NOT NULL, -- Increased length
+    PODate DATE DEFAULT (CURRENT_DATE), -- Changed to DATE and default to current date
+    SupplierName VARCHAR(150) NULL,
+    Status ENUM('Draft', 'Pending Approval', 'Approved', 'Ordered', 'Partially Received', 'Received', 'Cancelled') NOT NULL DEFAULT 'Draft', -- Added more statuses
+    Notes TEXT,
+    TotalAmount DECIMAL(10, 2) NULL, -- Optional: For tracking PO total
+    CreatedBy INT NOT NULL,
+    ApprovedBy INT NULL,
+    ApprovalDate TIMESTAMP NULL,
+    FOREIGN KEY (CreatedBy) REFERENCES Users(UserID) ON DELETE RESTRICT,
+    FOREIGN KEY (ApprovedBy) REFERENCES Users(UserID) ON DELETE SET NULL
+);
+
+CREATE TABLE PurchaseOrderItems (
+    POItemID INT PRIMARY KEY AUTO_INCREMENT,
+    POID INT NOT NULL,
+    ItemID INT NOT NULL,
+    Description VARCHAR(255) NULL, -- Allow manual description if item not yet in Items table or for specifics
+    QuantityOrdered INT NOT NULL,
+    QuantityReceived INT DEFAULT 0,
+    UnitPrice DECIMAL(10, 2) NULL,
+    FOREIGN KEY (POID) REFERENCES PurchaseOrders(POID) ON DELETE CASCADE,
+    FOREIGN KEY (ItemID) REFERENCES Items(ItemID) ON DELETE RESTRICT -- Prevent item deletion if on a PO
+);
+
+CREATE TABLE Notifications (
+    NotificationID INT PRIMARY KEY AUTO_INCREMENT,
+    UserID INT NULL, -- User to be notified (e.g., Admin for PO approval)
+    ItemID INT NULL,
+    POID INT NULL, -- Link notification to a PO if applicable
+    NotificationType ENUM('Low Stock', 'Out of Stock', 'PO Approval Required', 'PO Approved', 'PO Ordered', 'Item Received', 'Warranty Expiry Soon') NOT NULL,
+    Message TEXT NOT NULL,
+    IsRead BOOLEAN DEFAULT FALSE,
+    CreatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (UserID) REFERENCES Users(UserID) ON DELETE CASCADE,
+    FOREIGN KEY (ItemID) REFERENCES Items(ItemID) ON DELETE CASCADE,
+    FOREIGN KEY (POID) REFERENCES PurchaseOrders(POID) ON DELETE CASCADE
+);
+
+CREATE TABLE RecentActivities (
+    ActivityID INT PRIMARY KEY AUTO_INCREMENT,
+    ActivityDate TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    ActivityType VARCHAR(100) NOT NULL, -- e.g., 'User Login', 'Item Added', 'Transaction Created'
+    UserID INT NULL, -- User who performed the action
+    UserName VARCHAR(100), -- Store username for quick display, denormalized but useful
+    Details TEXT, -- e.g., "User 'admin' logged in.", "Added Item 'Laptop XYZ' (ID: 123)"
+    RelatedItemID INT NULL,
+    RelatedTransactionID INT NULL,
+    RelatedPOID INT NULL,
+    FOREIGN KEY (UserID) REFERENCES Users(UserID) ON DELETE SET NULL,
+    FOREIGN KEY (RelatedItemID) REFERENCES Items(ItemID) ON DELETE SET NULL,
+    FOREIGN KEY (RelatedTransactionID) REFERENCES Transactions(TransactionID) ON DELETE SET NULL,
+    FOREIGN KEY (RelatedPOID) REFERENCES PurchaseOrders(POID) ON DELETE SET NULL
+);
+
+CREATE TABLE SystemLogs (
+    LogID INT PRIMARY KEY AUTO_INCREMENT,
+    LogTime TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    LogLevel ENUM('INFO', 'WARNING', 'ERROR', 'CRITICAL') DEFAULT 'INFO',
+    Source VARCHAR(100), -- e.g., 'Database Trigger', 'Application Backend', 'Stored Procedure'
+    UserID INT NULL, -- If action is tied to a user
+    Action VARCHAR(255) NOT NULL,
+    Details TEXT,
+    IPAddress VARCHAR(45) NULL,
+    FOREIGN KEY (UserID) REFERENCES Users(UserID) ON DELETE SET NULL
+);
+
+-- Initial Data for Categories
+INSERT INTO Categories (CategoryName, Description) VALUES
+('Office Supplies', 'Pens, paper, notebooks, staplers, etc.'),
+('Electronics', 'Computers, monitors, peripherals, cables, etc.'),
+('Furniture', 'Desks, chairs, shelves, cabinets, etc.'),
+('Cleaning Supplies', 'Detergents, brooms, mops, trash bags, etc.'),
+('Educational Materials', 'Textbooks, lab equipment (non-machinery), charts, etc.'),
+('Machinery', 'Printers, projectors, specialized lab machines, power tools, etc.'),
+('Office Equipment', 'Photocopiers, laminators, shredders, AV equipment not classified as personal electronics.'),
+('Safety Gear', 'Gloves, goggles, first aid kits, etc.'),
+('Miscellaneous', 'Other items not fitting into specific categories.');
+
+
+-- Triggers
+DELIMITER //
+
+-- Trigger to set item status BEFORE inserting a new item
+-- This replaces the old CheckStockLevels_AI AFTER trigger
+CREATE TRIGGER SetStockStatus_BI BEFORE INSERT ON Items
+FOR EACH ROW
+BEGIN
+    IF NEW.Quantity <= 0 THEN
+        SET NEW.Status = 'Out of Stock';
+    ELSEIF NEW.Quantity <= NEW.ReorderLevel THEN
+        SET NEW.Status = 'Low Stock';
+    ELSE
+        SET NEW.Status = 'In Stock';
+    END IF;
+END//
+
+-- Trigger to set item status BEFORE updating an item
+-- This replaces the old CheckStockLevels_AU AFTER trigger for Status updates
+CREATE TRIGGER SetStockStatus_BU BEFORE UPDATE ON Items
+FOR EACH ROW
+BEGIN
+    -- Only update status if Quantity or ReorderLevel changes
+    IF OLD.Quantity <> NEW.Quantity OR OLD.ReorderLevel <> NEW.ReorderLevel THEN
+        IF NEW.Quantity <= 0 THEN
+            SET NEW.Status = 'Out of Stock';
+        ELSEIF NEW.Quantity > 0 AND NEW.Quantity <= NEW.ReorderLevel THEN
+            SET NEW.Status = 'Low Stock';
+        ELSE
+            SET NEW.Status = 'In Stock';
+        END IF;
+    END IF;
+
+    -- The logging for MachineStatus and ItemCondition changes remains, but is now in the BEFORE trigger
+    -- Note: Logging in BEFORE triggers can sometimes be tricky depending on the DB system.
+    -- If logging fails here, consider moving logging to a separate AFTER trigger
+    -- that only logs changes without modifying the 'Items' table itself.
+    IF NEW.IsMachinery = TRUE AND OLD.MachineStatus <> NEW.MachineStatus THEN
+        INSERT INTO RecentActivities(ActivityType, UserID, UserName, Details, RelatedItemID)
+        SELECT 'Machine Status Change', NEW.AddedBy, U.Username, CONCAT('Status of machine "', NEW.ItemName, '" (ID: ', NEW.ItemID, ') changed from ', OLD.MachineStatus, ' to ', NEW.MachineStatus, '.'), NEW.ItemID
+        FROM Users U WHERE U.UserID = NEW.AddedBy; -- Use NEW.AddedBy or a dedicated UpdatedBy field
+    END IF;
+
+    IF OLD.ItemCondition <> NEW.ItemCondition THEN
+        INSERT INTO RecentActivities(ActivityType, UserID, UserName, Details, RelatedItemID)
+        SELECT 'Item Condition Change', NEW.AddedBy, U.Username, CONCAT('Condition of item "', NEW.ItemName, '" (ID: ', NEW.ItemID, ') changed from ', OLD.ItemCondition, ' to ', NEW.ItemCondition, '.'), NEW.ItemID
+        FROM Users U WHERE U.UserID = NEW.AddedBy; -- Use NEW.AddedBy or a dedicated UpdatedBy field
+    END IF;
+
+END//
+
+
+-- Trigger to update stock quantity after a transaction is inserted
+-- This trigger remains AFTER INSERT on Transactions, which is correct as it modifies the Items table based on a transaction.
+CREATE TRIGGER UpdateStockAfterTransaction_AI AFTER INSERT ON Transactions
+FOR EACH ROW
+BEGIN
+    DECLARE current_item_name VARCHAR(150);
+    DECLARE current_item_quantity INT;
+    SELECT ItemName, Quantity INTO current_item_name, current_item_quantity FROM Items WHERE ItemID = NEW.ItemID;
+
+    IF NEW.TransactionType = 'Received' THEN
+        UPDATE Items SET Quantity = Quantity + NEW.Quantity WHERE ItemID = NEW.ItemID;
+    ELSEIF NEW.TransactionType = 'Issued' THEN
+        IF current_item_quantity < NEW.Quantity THEN
+            SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Cannot issue item: Insufficient stock for item.';
+        ELSE
+            UPDATE Items SET Quantity = Quantity - NEW.Quantity WHERE ItemID = NEW.ItemID;
+        END IF;
+    ELSEIF NEW.TransactionType = 'Returned' THEN
+        UPDATE Items SET Quantity = Quantity + NEW.Quantity WHERE ItemID = NEW.ItemID;
+    ELSEIF NEW.TransactionType = 'Adjusted' THEN -- For stock takes, can be positive or negative
+        UPDATE Items SET Quantity = Quantity + NEW.Quantity WHERE ItemID = NEW.ItemID; -- NEW.Quantity can be negative for adjustments down
+         IF (SELECT Quantity FROM Items WHERE ItemID = NEW.ItemID) < 0 THEN
+            UPDATE Items SET Quantity = 0 WHERE ItemID = NEW.ItemID; -- Prevent negative stock from adjustments
+            -- Optionally log a warning or error
+        END IF;
+    ELSEIF NEW.TransactionType IN ('Damaged Out', 'Lost') THEN
+        IF current_item_quantity < NEW.Quantity THEN
+            SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Cannot mark item as damaged/lost: Insufficient stock.';
+        ELSE
+            UPDATE Items SET Quantity = Quantity - NEW.Quantity WHERE ItemID = NEW.ItemID;
+        END IF;
+    END IF;
+
+    -- Log activity
+    INSERT INTO RecentActivities(ActivityType, UserID, UserName, Details, RelatedItemID, RelatedTransactionID)
+    SELECT CONCAT('Transaction: ', NEW.TransactionType), NEW.UserID, U.Username,
+           CONCAT(NEW.TransactionType, ' ', NEW.Quantity, ' unit(s) of "', current_item_name, '" (ID: ', NEW.ItemID, '). ',
+                  IFNULL(CONCAT('Issued to: ', NEW.IssuedToPersonName, ', Dept: ', NEW.IssuedToDepartment, '. '), '') ,
+                  IFNULL(CONCAT('Notes: ', NEW.Notes), '')),
+           NEW.ItemID, NEW.TransactionID
+    FROM Users U WHERE U.UserID = NEW.UserID;
+END//
+
+-- Trigger to log PO status changes
+-- This trigger remains AFTER UPDATE on PurchaseOrders, which is correct as it modifies RecentActivities and Notifications.
+CREATE TRIGGER LogPurchaseOrderStatusChange_AU AFTER UPDATE ON PurchaseOrders
+FOR EACH ROW
+BEGIN
+    IF OLD.Status <> NEW.Status THEN
+        INSERT INTO RecentActivities (ActivityType, UserID, UserName, Details, RelatedPOID)
+        SELECT 'PO Status Change', NEW.ApprovedBy, U.Username, -- Or CreatedBy if ApprovedBy is NULL
+               CONCAT('Status of PO #', NEW.PONumber, ' changed from ', OLD.Status, ' to ', NEW.Status),
+               NEW.POID
+        FROM Users U WHERE U.UserID = IFNULL(NEW.ApprovedBy, NEW.CreatedBy);
+
+        -- Create notification if PO is approved or ordered
+        IF NEW.Status = 'Approved' THEN
+            INSERT INTO Notifications(UserID, POID, NotificationType, Message)
+            VALUES (NEW.CreatedBy, NEW.POID, 'PO Approved', CONCAT('Purchase Order #', NEW.PONumber, ' has been approved.'));
+        ELSEIF NEW.Status = 'Ordered' THEN
+             INSERT INTO Notifications(UserID, POID, NotificationType, Message)
+            VALUES (NEW.CreatedBy, NEW.POID, 'PO Ordered', CONCAT('Purchase Order #', NEW.PONumber, ' has been marked as ordered.'));
+        END IF;
+    END IF;
+END//
+
+-- Trigger to update PurchaseOrderItem QuantityReceived and potentially PO status
+-- This trigger remains AFTER INSERT on Transactions, which is correct as it modifies PurchaseOrderItems and PurchaseOrders.
+CREATE TRIGGER UpdatePOItemOnTransaction_AI AFTER INSERT ON Transactions
+FOR EACH ROW
+BEGIN
+    DECLARE v_poid INT;
+    DECLARE v_total_ordered INT;
+    DECLARE v_total_received INT;
+
+    IF NEW.TransactionType = 'Received' AND NEW.Notes LIKE 'PO#%' THEN
+        -- Try to extract PO Number from notes if available, e.g., "Received against PO#PO-20240512-001"
+        -- This is a basic example; a more robust solution might involve a direct link or a dedicated field in Transactions for PO Number.
+        SET v_poid = (SELECT POID FROM PurchaseOrders WHERE PONumber = SUBSTRING_INDEX(SUBSTRING_INDEX(NEW.Notes, 'PO#', -1), ' ', 1) LIMIT 1);
+
+        IF v_poid IS NOT NULL THEN
+            -- Update the specific PurchaseOrderItem
+            UPDATE PurchaseOrderItems
+            SET QuantityReceived = QuantityReceived + NEW.Quantity
+            WHERE POID = v_poid AND ItemID = NEW.ItemID
+            ORDER BY POItemID -- In case of multiple lines for the same item, update the first one. More complex logic might be needed.
+            LIMIT 1; -- Assuming one PO line item per item per PO for simplicity here.
+
+            -- Check if the entire PO is fully received
+            SELECT SUM(QuantityOrdered), SUM(QuantityReceived)
+            INTO v_total_ordered, v_total_received
+            FROM PurchaseOrderItems
+            WHERE POID = v_poid;
+
+            IF v_total_received >= v_total_ordered THEN
+                UPDATE PurchaseOrders SET Status = 'Received' WHERE POID = v_poid AND Status != 'Received';
+            ELSEIF v_total_received > 0 THEN
+                UPDATE PurchaseOrders SET Status = 'Partially Received' WHERE POID = v_poid AND Status NOT IN ('Received', 'Partially Received');
+            END IF;
+        END IF;
+    END IF;
+END//
+
+
+DELIMITER ;
+
+-- Stored Procedure for automatically generating a DRAFT purchase order for low stock items
+DELIMITER //
+CREATE PROCEDURE AutoGenerateDraftPOForLowStock(IN p_requesting_user_id INT)
+BEGIN
+    DECLARE v_po_id INT;
+    DECLARE v_po_number VARCHAR(30);
+    DECLARE items_to_order_count INT DEFAULT 0;
+    DECLARE done INT DEFAULT FALSE;
+    DECLARE v_item_id INT;
+    DECLARE v_item_name VARCHAR(150);
+    DECLARE v_quantity_to_order INT;
+    DECLARE v_reorder_level INT;
+    DECLARE v_current_quantity INT;
+
+    -- Cursor to select items that are at or below their reorder level and not already on an active PO draft/pending approval
+    DECLARE cur_low_stock_items CURSOR FOR
+        SELECT I.ItemID, I.ItemName, I.ReorderLevel, I.Quantity, (I.ReorderLevel - I.Quantity + 5) AS OrderQty -- Order reorder_level - current + buffer (e.g. 5)
+        FROM Items I
+        WHERE I.Quantity <= I.ReorderLevel
+          AND I.Status != 'Out of Stock' -- Don't order if completely out, might need manual check
+          AND NOT EXISTS (
+              SELECT 1 FROM PurchaseOrderItems POI
+              JOIN PurchaseOrders PO ON POI.POID = PO.POID
+              WHERE POI.ItemID = I.ItemID AND PO.Status IN ('Draft', 'Pending Approval', 'Approved', 'Ordered')
+          ); -- Avoid re-adding items already on an active PO
+
+    DECLARE CONTINUE HANDLER FOR NOT FOUND SET done = TRUE;
+
+    -- Check if there are items to order
+    SELECT COUNT(*) INTO items_to_order_count
+    FROM Items I
+    WHERE I.Quantity <= I.ReorderLevel
+      AND I.Status != 'Out of Stock'
+      AND NOT EXISTS (
+          SELECT 1 FROM PurchaseOrderItems POI
+          JOIN PurchaseOrders PO ON POI.POID = PO.POID
+          WHERE POI.ItemID = I.ItemID AND PO.Status IN ('Draft', 'Pending Approval', 'Approved', 'Ordered')
+      );
+
+    IF items_to_order_count > 0 THEN
+        -- Generate PO Number (PO-YYYYMMDD-HHMMSS-UserID)
+        SET v_po_number = CONCAT('PO-AUTO-', DATE_FORMAT(NOW(), '%Y%m%d%H%i%s'), '-', LPAD(p_requesting_user_id, 4, '0'));
+
+        -- Create a new DRAFT Purchase Order
+        INSERT INTO PurchaseOrders(PONumber, Status, CreatedBy, Notes)
+        VALUES(v_po_number, 'Draft', p_requesting_user_id, 'Auto-generated draft PO for low stock items. Please review and approve.');
+        SET v_po_id = LAST_INSERT_ID();
+
+        OPEN cur_low_stock_items;
+        read_loop: LOOP
+            FETCH cur_low_stock_items INTO v_item_id, v_item_name, v_reorder_level, v_current_quantity, v_quantity_to_order;
+            IF done THEN
+                LEAVE read_loop;
+            END IF;
+
+            IF v_quantity_to_order <= 0 THEN -- Ensure we order a positive quantity
+                SET v_quantity_to_order = v_reorder_level; -- Default to reorder level if calculation is zero or less
+            END IF;
+
+            -- Add item to the new purchase order
+            INSERT INTO PurchaseOrderItems(POID, ItemID, Description, QuantityOrdered, UnitPrice)
+            VALUES(v_po_id, v_item_id, v_item_name, v_quantity_to_order, NULL); -- UnitPrice to be filled later
+
+        END LOOP;
+        CLOSE cur_low_stock_items;
+
+        -- Create a notification for the admin/relevant user to approve this auto-generated PO
+        INSERT INTO Notifications(UserID, POID, NotificationType, Message)
+        SELECT UserID, v_po_id, 'PO Approval Required', CONCAT('Auto-generated Draft Purchase Order #', v_po_number, ' requires your review and approval.')
+        FROM Users WHERE Role = 'Admin' AND IsActive = TRUE; -- Notify all active admins
+
+        -- Log this action
+        INSERT INTO SystemLogs(Source, UserID, Action, Details)
+        VALUES('StoredProcedure_AutoGenerateDraftPO', p_requesting_user_id, 'Auto PO Draft Creation', CONCAT('Created Draft PO #', v_po_number, ' with ', items_to_order_count, ' item(s).'));
+
+    ELSE
+        -- Log if no items needed ordering
+        INSERT INTO SystemLogs(Source, UserID, Action, Details)
+        VALUES('StoredProcedure_AutoGenerateDraftPO', p_requesting_user_id, 'Auto PO Check', 'No items found requiring reorder for auto PO generation.');
+    END IF;
+END//
+DELIMITER ;
+
+
+-- ===================================================================================
+-- INSERT ADMIN USER (Execute this after creating the tables)
+-- ===================================================================================
+INSERT INTO Users (Username, Password, FullName, Email, Role, IsActive, CreatedBy)
+VALUES (
+    'admin',
+    'FeKw08M4keuw8e9gnsQZQgwg4yDOlMZfvIwzEkSOsiU=', -- Default hashed password
+    'System Administrator',
+    'admin@example.com',
+    'Admin',
+    TRUE,
+    NULL -- First admin user, CreatedBy is NULL
+);
+
+-- Insert a default Custodian user
+INSERT INTO Users (Username, Password, FullName, Email, Role, IsActive, CreatedBy)
+VALUES (
+    'custodian',
+    'FeKw08M4keuw8e9gnsQZQgwg4yDOlMZfvIwzEkSOsiU=', -- Use a DIFFERENT HASHED PASSWORD in production
+    'Warehouse Custodian',
+    'custodian@example.com',
+    'Custodian',
+    TRUE,
+   NULL
+);
+
+-- Insert a default Kiosk user (for the item borrowing POS-like interface)
+INSERT INTO Users (Username, Password, FullName, Email, Role, IsActive, CreatedBy)
+VALUES (
+    'kiosk',
+    'FeKw08M4keuw8e9gnsQZQgwg4yDOlMZfvIwzEkSOsiU=', -- Use a DIFFERENT HASHED PASSWORD in production
+    'Kiosk System User',
+    'kiosk@example.com',
+    'KioskUser',
+    TRUE,
+    NULL
+);
+
+-- Example Items
+INSERT INTO Items (ItemName, Description, CategoryID, Quantity, ReorderLevel, Unit, IsMachinery, MachineStatus, ItemCondition, AddedBy, SerialNumber, PurchaseDate, WarrantyExpiryDate) VALUES
+('Laser Printer X2000', 'Heavy-duty network laser printer', (SELECT CategoryID FROM Categories WHERE CategoryName = 'Machinery'), 2, 1, 'pcs', TRUE, 'Active', 'Good', (SELECT UserID FROM Users WHERE Username = 'admin'), 'SN-LPX2000-001', '2023-01-15', '2025-01-14'),
+('Office Chair Ergonomic', 'Ergonomic office chair with lumbar support', (SELECT CategoryID FROM Categories WHERE CategoryName = 'Furniture'), 10, 5, 'pcs', FALSE, 'Not Applicable', 'Good', (SELECT UserID FROM Users WHERE Username = 'admin'), NULL, '2022-11-20', NULL),
+('Projector HD550', 'Full HD Classroom Projector', (SELECT CategoryID FROM Categories WHERE CategoryName = 'Office Equipment'), 3, 1, 'pcs', TRUE, 'Active', 'Good', (SELECT UserID FROM Users WHERE Username = 'admin'), 'SN-PHD550-001', '2023-05-10', '2025-05-09'),
+('A4 Ream Paper', 'Standard A4 printing paper, 80gsm', (SELECT CategoryID FROM Categories WHERE CategoryName = 'Office Supplies'), 50, 20, 'reams', FALSE, 'Not Applicable', 'Good', (SELECT UserID FROM Users WHERE Username = 'admin'), NULL, '2024-03-01', NULL),
+('Laptop Dell XPS 13', 'Student/Staff Laptop', (SELECT CategoryID FROM Categories WHERE CategoryName = 'Electronics'), 5, 2, 'pcs', TRUE, 'Active', 'Good', (SELECT UserID FROM Users WHERE Username = 'admin'), 'SN-DXPS13-001', '2023-08-20', '2026-08-19');
+
+
+
+-- Call the procedure to check if any items need a draft PO (run by admin, UserID 1)
+-- CALL AutoGenerateDraftPOForLowStock(1);
+

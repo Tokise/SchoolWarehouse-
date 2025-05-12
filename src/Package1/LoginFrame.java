@@ -159,7 +159,7 @@ public class LoginFrame extends javax.swing.JFrame {
         String username = jTextField1.getText().trim();
         String password = new String(jPasswordField1.getPassword());
 
-       
+
         String sql = "SELECT UserID, FullName, Role, Password FROM Users WHERE Username = ?";
 
         try (Connection conn = DBConnection.getConnection();
@@ -169,15 +169,15 @@ public class LoginFrame extends javax.swing.JFrame {
 
             try (ResultSet rs = pstmt.executeQuery()) {
                 if (rs.next()) {
-                    
+
                     int userIdFromDB = rs.getInt("UserID");
                     String fullNameFromDB = rs.getString("FullName");
                     String roleFromDB = rs.getString("Role");
                     String hashedPasswordFromDB = rs.getString("Password"); // Get the hashed password
 
-                   
+
                     if (PasswordHasher.verifyPassword(password, hashedPasswordFromDB)) {
-                     
+
                         User loggedInUser = new User();
                         loggedInUser.setUserId(userIdFromDB);
                         loggedInUser.setFullName(fullNameFromDB);
@@ -186,18 +186,18 @@ public class LoginFrame extends javax.swing.JFrame {
 
                         System.out.println("Login Successful - User ID: " + loggedInUser.getUserId()); // Debug
 
-                       
+
                         DashBoardFrame1 dashboardFrame = new DashBoardFrame1(loggedInUser);
                         dashboardFrame.setVisible(true); // Make dashboard visible
-                        dashboardFrame.showDashboard();
-                        this.dispose(); 
+                        // Removed the call to dashboardFrame.showDashboard();
+                        this.dispose();
 
                     } else {
-                       
+
                         JOptionPane.showMessageDialog(this, "Invalid credentials.", "Login Failed", JOptionPane.ERROR_MESSAGE);
                     }
                 } else {
-                   
+
                     JOptionPane.showMessageDialog(this, "Invalid credentials.", "Login Failed", JOptionPane.ERROR_MESSAGE);
                 }
             }
@@ -205,15 +205,14 @@ public class LoginFrame extends javax.swing.JFrame {
             JOptionPane.showMessageDialog(this, "Database error: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
             ex.printStackTrace();
         } catch (RuntimeException ex) {
-           
+
              JOptionPane.showMessageDialog(this, "Error during password verification: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
              ex.printStackTrace();
         }
     }
 
-    
-    
-    
+
+
     private void jTextField1ActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_jTextField1ActionPerformed
       
     }//GEN-LAST:event_jTextField1ActionPerformed
